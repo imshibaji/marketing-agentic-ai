@@ -85,4 +85,47 @@ class Campaign extends BaseModel {
         $stmt = $this->pdo->prepare("UPDATE campaigns SET llm_provider = ? WHERE id = ?");
         $stmt->execute([$provider, $id]);
     }
+
+    public function initializeSchema(): void {
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS campaigns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            product_description TEXT NOT NULL,
+            target_audience TEXT NOT NULL,
+            channel TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'CREATED', -- CREATED, RUNNING, COMPLETED, FAILED
+            final_content TEXT,
+            crawl_type TEXT DEFAULT 'none',
+            crawl_target TEXT DEFAULT '',
+            language TEXT DEFAULT 'English',
+            user_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        )");
+
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS campaign_shares (
+            campaign_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (campaign_id, user_id),
+            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )");
+
+        try {
+            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN crawl_type TEXT DEFAULT 'none'");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN crawl_target TEXT DEFAULT ''");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN language TEXT DEFAULT 'English'");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN user_id INTEGER");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN llm_provider TEXT DEFAULT 'gemini'");
+        } catch (\PDOException $e) {}
+    }
 }

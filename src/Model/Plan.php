@@ -45,4 +45,44 @@ class Plan extends BaseModel {
         $stmt = $this->pdo->prepare("DELETE FROM plans WHERE id = ?");
         $stmt->execute([$id]);
     }
+
+    public function initializeSchema(): void {
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            campaign_limit INTEGER NOT NULL DEFAULT 10,
+            lead_limit INTEGER NOT NULL DEFAULT 50,
+            llm_limit INTEGER NOT NULL DEFAULT 100,
+            email_limit INTEGER NOT NULL DEFAULT 100,
+            whatsapp_limit INTEGER NOT NULL DEFAULT 100,
+            sms_limit INTEGER NOT NULL DEFAULT 100,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+
+        try {
+            $this->pdo->exec("ALTER TABLE plans ADD COLUMN llm_limit INTEGER NOT NULL DEFAULT 100");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE plans ADD COLUMN email_limit INTEGER NOT NULL DEFAULT 100");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE plans ADD COLUMN whatsapp_limit INTEGER NOT NULL DEFAULT 100");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE plans ADD COLUMN sms_limit INTEGER NOT NULL DEFAULT 100");
+        } catch (\PDOException $e) {}
+
+        // Insert a default plan if not exists
+        try {
+            $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM plans WHERE name = ?");
+            $stmt->execute(['Default Plan']);
+            if ($stmt->fetchColumn() == 0) {
+                $this->pdo->prepare("INSERT INTO plans (name, campaign_limit, lead_limit, llm_limit, email_limit, whatsapp_limit, sms_limit) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                     ->execute(['Default Plan', 10, 50, 100, 100, 100, 100]);
+                $defaultPlanId = (int)$this->pdo->lastInsertId();
+                // Assign all existing users who have plan_id NULL to this default plan
+                $this->pdo->prepare("UPDATE users SET plan_id = ? WHERE plan_id IS NULL")->execute([$defaultPlanId]);
+            }
+        } catch (\PDOException $e) {}
+    }
 }

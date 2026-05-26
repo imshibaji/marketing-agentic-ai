@@ -23,4 +23,15 @@ class EmailOtp extends BaseModel {
         }
         return false;
     }
+
+    public function initializeSchema(): void {
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS email_otps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            otp TEXT NOT NULL,
+            expires_at DATETIME NOT NULL,
+            used INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+    }
 }

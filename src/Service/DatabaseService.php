@@ -11,6 +11,9 @@ use MarketingAgent\Model\UserActivityLog;
 use MarketingAgent\Model\EmailOtp;
 use MarketingAgent\Model\Lead;
 use MarketingAgent\Model\AgentLog;
+use MarketingAgent\Model\Notification;
+use MarketingAgent\Model\PublicChat;
+
 
 class DatabaseService {
     private ?PDO $pdo = null;
@@ -26,6 +29,8 @@ class DatabaseService {
     private EmailOtp $emailOtpModel;
     private Lead $leadModel;
     private AgentLog $agentLogModel;
+    private Notification $notificationModel;
+    private PublicChat $publicChatModel;
 
     public function __construct() {
         $dbDir = __DIR__ . '/../../database';
@@ -36,7 +41,6 @@ class DatabaseService {
         $this->driver = strtolower(trim((string)getenv('DB_DRIVER') ?: 'sqlite'));
         $this->loadDatabaseConfig($dbDir);
         $this->connect();
-        $this->initializeSchema();
 
         $this->userModel = new User($this->pdo);
         $this->settingModel = new Setting($this->pdo);
@@ -46,6 +50,10 @@ class DatabaseService {
         $this->emailOtpModel = new EmailOtp($this->pdo);
         $this->leadModel = new Lead($this->pdo);
         $this->agentLogModel = new AgentLog($this->pdo);
+        $this->notificationModel = new Notification($this->pdo);
+        $this->publicChatModel = new PublicChat($this->pdo);
+
+        $this->initializeSchema();
     }
 
     private function loadDatabaseConfig(string $dbDir): void {
@@ -153,263 +161,17 @@ class DatabaseService {
     }
 
     private function initializeSchema(): void {
-        // Users Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'user', -- admin, user
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )");
-
-        // Settings Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )");
-
-        // Campaigns Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS campaigns (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            product_description TEXT NOT NULL,
-            target_audience TEXT NOT NULL,
-            channel TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'CREATED', -- CREATED, RUNNING, COMPLETED, FAILED
-            final_content TEXT,
-            crawl_type TEXT DEFAULT 'none',
-            crawl_target TEXT DEFAULT '',
-            language TEXT DEFAULT 'English',
-            user_id INTEGER,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-        )");
-
-        // Run migrations for existing databases
-        try {
-            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN crawl_type TEXT DEFAULT 'none'");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN crawl_target TEXT DEFAULT ''");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN language TEXT DEFAULT 'English'");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN user_id INTEGER");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN full_name TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN email TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN mobile TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN whatsapp_number TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN plan_campaigns INTEGER DEFAULT 10");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN plan_leads INTEGER DEFAULT 50");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN plan_id INTEGER");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE plans ADD COLUMN llm_limit INTEGER NOT NULL DEFAULT 100");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE plans ADD COLUMN email_limit INTEGER NOT NULL DEFAULT 100");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE plans ADD COLUMN whatsapp_limit INTEGER NOT NULL DEFAULT 100");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE plans ADD COLUMN sms_limit INTEGER NOT NULL DEFAULT 100");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN llm_usage INTEGER NOT NULL DEFAULT 0");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN email_usage INTEGER NOT NULL DEFAULT 0");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN whatsapp_usage INTEGER NOT NULL DEFAULT 0");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN sms_usage INTEGER NOT NULL DEFAULT 0");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN llm_provider TEXT DEFAULT 'gemini'");
-        } catch (\PDOException $e) {}
-
-        // Campaign Shares Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS campaign_shares (
-            campaign_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (campaign_id, user_id),
-            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )");
-
-        // Plans Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS plans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            campaign_limit INTEGER NOT NULL DEFAULT 10,
-            lead_limit INTEGER NOT NULL DEFAULT 50,
-            llm_limit INTEGER NOT NULL DEFAULT 100,
-            email_limit INTEGER NOT NULL DEFAULT 100,
-            whatsapp_limit INTEGER NOT NULL DEFAULT 100,
-            sms_limit INTEGER NOT NULL DEFAULT 100,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )");
-
-        // Insert a default plan if not exists
-        try {
-            $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM plans WHERE name = ?");
-            $stmt->execute(['Default Plan']);
-            if ($stmt->fetchColumn() == 0) {
-                $this->pdo->prepare("INSERT INTO plans (name, campaign_limit, lead_limit, llm_limit, email_limit, whatsapp_limit, sms_limit) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                     ->execute(['Default Plan', 10, 50, 100, 100, 100, 100]);
-                $defaultPlanId = (int)$this->pdo->lastInsertId();
-                // Assign all existing users who have plan_id NULL to this default plan
-                $this->pdo->prepare("UPDATE users SET plan_id = ? WHERE plan_id IS NULL")->execute([$defaultPlanId]);
-            }
-        } catch (\PDOException $e) {}
-
-        // User Activity Logs Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS user_activity_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            action TEXT NOT NULL,
-            details TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-        )");
-
-        // Email OTPs Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS email_otps (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL,
-            otp TEXT NOT NULL,
-            expires_at DATETIME NOT NULL,
-            used INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )");
-
-        // Alter leads table to add columns for manual lead input & ownership
-        try {
-            $this->pdo->exec("ALTER TABLE leads ADD COLUMN user_id INTEGER");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE leads ADD COLUMN source TEXT DEFAULT 'agent'");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE leads ADD COLUMN mobile TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE leads ADD COLUMN sms_draft TEXT");
-        } catch (\PDOException $e) {}
-
-        // Leads Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS leads (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            campaign_id INTEGER,
-            company_name TEXT NOT NULL,
-            contact_name TEXT,
-            email TEXT,
-            whatsapp TEXT,
-            mobile TEXT,
-            industry TEXT,
-            description TEXT,
-            score TEXT, -- HIGH, MEDIUM, LOW
-            reasoning TEXT,
-            email_draft TEXT,
-            whatsapp_draft TEXT,
-            sms_draft TEXT,
-            status TEXT DEFAULT 'GENERATED', -- GENERATED, QUALIFIED, OUTREACHED, CLOSED
-            user_id INTEGER,
-            source TEXT DEFAULT 'agent',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
-        )");
-
-        // Agent Logs Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS agent_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            campaign_id INTEGER,
-            agent_name TEXT NOT NULL,
-            action TEXT NOT NULL,
-            log_text TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
-        )");
-
-        // Notifications Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS notifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender_id INTEGER,
-            title TEXT NOT NULL,
-            message TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE SET NULL
-        )");
-
-        // Public Chats Table
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS public_chats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            message TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )");
-
-        // Set default settings if not exists
-        $defaults = [
-            'app_name' => 'Antigravity Marketing',
-            'llm_provider' => 'gemini',
-            'gemini_api_key' => '',
-            'gemini_model' => 'gemini-1.5-flash',
-            'lm_studio_url' => 'http://localhost:1234/v1',
-            'lm_studio_model' => 'qwen2.5-7b-instruct',
-            'lm_studio_api_key' => '',
-            'lm_studio_extra_model' => '',
-            'ollama_url' => 'http://localhost:11434/v1',
-            'ollama_model' => 'llama3',
-            'ollama_api_key' => '',
-            'ollama_extra_model' => '',
-            'smtp_host' => 'mock',
-            'smtp_port' => '587',
-            'smtp_user' => '',
-            'smtp_pass' => '',
-            'smtp_from_email' => 'outreach@example.com',
-            'smtp_from_name' => 'Antigravity Outreach',
-            'whatsapp_token' => 'mock',
-            'whatsapp_phone_id' => '',
-            'sms_provider' => 'mock',
-            'sms_twilio_account_sid' => '',
-            'sms_twilio_auth_token' => '',
-            'sms_twilio_from_number' => '',
-            'sms_custom_url' => '',
-            'sms_custom_method' => 'POST',
-            'sms_custom_headers' => '',
-            'sms_custom_body' => '{"to":"{to}", "message":"{message}"}',
-            'enable_public_chat' => '1',
-            'gemini_active' => '1',
-            'lm_studio_active' => '1',
-            'ollama_active' => '1'
-        ];
-
-        foreach ($defaults as $key => $val) {
-            $stmt = $this->pdo->prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
-            $stmt->execute([$key, $val]);
-        }
+        // Initialize in order of dependencies (foreign keys)
+        $this->planModel->initializeSchema();
+        $this->userModel->initializeSchema();
+        $this->campaignModel->initializeSchema();
+        $this->leadModel->initializeSchema();
+        $this->agentLogModel->initializeSchema();
+        $this->userActivityLogModel->initializeSchema();
+        $this->emailOtpModel->initializeSchema();
+        $this->settingModel->initializeSchema();
+        $this->notificationModel->initializeSchema();
+        $this->publicChatModel->initializeSchema();
     }
 
     public function getPdo(): PDO {

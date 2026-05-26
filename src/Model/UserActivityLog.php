@@ -16,4 +16,15 @@ class UserActivityLog extends BaseModel {
         $stmt->execute([$userId]);
         return $stmt->fetchAll();
     }
+
+    public function initializeSchema(): void {
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS user_activity_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            action TEXT NOT NULL,
+            details TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        )");
+    }
 }

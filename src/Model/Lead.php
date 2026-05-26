@@ -153,4 +153,41 @@ class Lead extends BaseModel {
         $stmt = $this->pdo->prepare("DELETE FROM leads WHERE campaign_id = ?");
         $stmt->execute([$campaignId]);
     }
+
+    public function initializeSchema(): void {
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id INTEGER,
+            company_name TEXT NOT NULL,
+            contact_name TEXT,
+            email TEXT,
+            whatsapp TEXT,
+            mobile TEXT,
+            industry TEXT,
+            description TEXT,
+            score TEXT, -- HIGH, MEDIUM, LOW
+            reasoning TEXT,
+            email_draft TEXT,
+            whatsapp_draft TEXT,
+            sms_draft TEXT,
+            status TEXT DEFAULT 'GENERATED', -- GENERATED, QUALIFIED, OUTREACHED, CLOSED
+            user_id INTEGER,
+            source TEXT DEFAULT 'agent',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+        )");
+
+        try {
+            $this->pdo->exec("ALTER TABLE leads ADD COLUMN user_id INTEGER");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE leads ADD COLUMN source TEXT DEFAULT 'agent'");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE leads ADD COLUMN mobile TEXT");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE leads ADD COLUMN sms_draft TEXT");
+        } catch (\PDOException $e) {}
+    }
 }

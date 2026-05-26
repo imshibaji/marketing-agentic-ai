@@ -127,4 +127,48 @@ class User extends BaseModel {
         $stmt = $this->pdo->prepare("UPDATE users SET sms_usage = sms_usage + 1 WHERE id = ?");
         $stmt->execute([$userId]);
     }
+
+    public function initializeSchema(): void {
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'user', -- admin, user
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN full_name TEXT");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN email TEXT");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN mobile TEXT");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN whatsapp_number TEXT");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN plan_campaigns INTEGER DEFAULT 10");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN plan_leads INTEGER DEFAULT 50");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN plan_id INTEGER");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN llm_usage INTEGER NOT NULL DEFAULT 0");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN email_usage INTEGER NOT NULL DEFAULT 0");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN whatsapp_usage INTEGER NOT NULL DEFAULT 0");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE users ADD COLUMN sms_usage INTEGER NOT NULL DEFAULT 0");
+        } catch (\PDOException $e) {}
+    }
 }
