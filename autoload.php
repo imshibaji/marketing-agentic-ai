@@ -1,7 +1,17 @@
 <?php
 /**
- * Custom PSR-4 Autoloader for Marketing AI Agent Application
+ * Autoloader for Marketing AI Agent Application.
+ *
+ * - Loads Composer dependencies when vendor/autoload.php exists.
+ * - Falls back to a custom PSR-4 autoloader for application classes.
  */
+
+// If Composer is installed for this project, load its autoloader first.
+$composerAutoload = __DIR__ . '/vendor/autoload.php';
+if (file_exists($composerAutoload)) {
+    require_once $composerAutoload;
+}
+
 spl_autoload_register(function ($class) {
     // Project-specific namespace prefix
     $prefix = 'MarketingAgent\\';

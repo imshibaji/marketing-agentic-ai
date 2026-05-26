@@ -6,10 +6,12 @@ use Exception;
 class LmStudioProvider implements LlmProviderInterface {
     private string $baseUrl;
     private string $model;
+    private string $apiKey;
 
-    public function __construct(string $baseUrl = 'http://localhost:1234/v1', string $model = 'qwen2.5-7b-instruct') {
+    public function __construct(string $baseUrl = 'http://localhost:1234/v1', string $model = 'qwen2.5-7b-instruct', string $apiKey = '') {
         $this->baseUrl = rtrim($baseUrl, '/');
         $this->model = $model ?: 'qwen2.5-7b-instruct';
+        $this->apiKey = trim($apiKey);
     }
 
     public function generate(string $systemPrompt, string $userPrompt, float $temperature = 0.7): string {
@@ -30,7 +32,12 @@ class LmStudioProvider implements LlmProviderInterface {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+
+        $headers = ['Content-Type: application/json'];
+        if (!empty($this->apiKey)) {
+            $headers[] = "Authorization: Bearer {$this->apiKey}";
+        }
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($requestBody));
         curl_setopt($ch, CURLOPT_TIMEOUT, 90);
 

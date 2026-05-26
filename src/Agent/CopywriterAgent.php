@@ -35,7 +35,7 @@ Your output must be in clean Markdown. Depending on the channel, follow these fo
 --- If Channel is 'social':
 Write a 3-part social media campaign:
 - Post 1 (LinkedIn style): Educational, thought-leadership, long-form, professional, with hashtags and emojis.
-- Post 2 (Twitter/X style): Short, punchy hook, bulleted value propositions, high urgency.
+- Post 2 (Twitter/X/Facebook style): Short, punchy hook, bulleted value propositions, high urgency.
 - Post 3 (Instagram/LinkedIn style): Conversational story-driven post focused on a user case study.
 
 --- If Channel is 'blog':

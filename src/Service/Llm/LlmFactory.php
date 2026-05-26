@@ -18,15 +18,19 @@ class LlmFactory {
                 break;
 
             case 'lm_studio':
+            case 'lm_studio_extra':
                 $url = $settings['lm_studio_url'] ?? 'http://localhost:1234/v1';
-                $model = $settings['lm_studio_model'] ?? 'qwen2.5-7b-instruct';
-                $inner = new LmStudioProvider($url, $model);
+                $model = ($provider === 'lm_studio_extra') ? ($settings['lm_studio_extra_model'] ?? '') : ($settings['lm_studio_model'] ?? 'qwen2.5-7b-instruct');
+                $apiKey = $settings['lm_studio_api_key'] ?? '';
+                $inner = new LmStudioProvider($url, $model, $apiKey);
                 break;
 
             case 'ollama':
+            case 'ollama_extra':
                 $url = $settings['ollama_url'] ?? 'http://localhost:11434/v1';
-                $model = $settings['ollama_model'] ?? 'llama3';
-                $inner = new OllamaProvider($url, $model);
+                $model = ($provider === 'ollama_extra') ? ($settings['ollama_extra_model'] ?? '') : ($settings['ollama_model'] ?? 'llama3');
+                $apiKey = $settings['ollama_api_key'] ?? '';
+                $inner = new OllamaProvider($url, $model, $apiKey);
                 break;
 
             default:

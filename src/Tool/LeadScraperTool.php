@@ -26,6 +26,7 @@ class LeadScraperTool {
         }
 
         $sourceTypeInstruction = "";
+        $websiteData = [];
         $sourceLower = strtolower($sourceUrl);
         if (strpos($sourceLower, 'http://') === 0 || strpos($sourceLower, 'https://') === 0) {
             if (strpos($sourceLower, 'google.com/maps') !== false || strpos($sourceLower, 'maps.google') !== false || (strpos($sourceLower, 'google.') !== false && strpos($sourceLower, '/maps') !== false)) {
@@ -35,10 +36,15 @@ Generate exactly 5 realistic local business prospects from this geographical are
 Include a realistic physical address and a Google Maps review rating metric (e.g., '4.7 stars (85 reviews)') in each company's description. 
 Derive the company domains and emails realistically from their company names.";
             } else {
-                // Website Link
-                $sourceTypeInstruction = "The user has specified a website URL directory/business directory as the scraping source: '{$sourceUrl}'. 
-Generate exactly 5 realistic target companies as if they were extracted from this website directory. 
-Make sure the contact emails use domains derived from these company names, and the descriptions specify their business activities and how they align with the directory link category.";
+                // Website Link or Webpage URL
+                $websiteData = $this->scrapeWebsitePage($sourceUrl);
+                if (!empty($websiteData['fetch_success'])) {
+                    $sourceTypeInstruction = "The user has specified a website or webpage URL as the scraping source: '{$sourceUrl}'.
+Use the actual scraped website content below to identify realistic target companies, services, and business descriptions when generating leads.";
+                } else {
+                    $sourceTypeInstruction = "The user has specified a website or webpage URL as the scraping source: '{$sourceUrl}'.
+Attempt to generate exactly 5 realistic target companies that could be found via this website or webpage. If the website could not be fetched, proceed with realistic prospect generation based on the page URL and target audience.";
+                }
             }
         } elseif (strpos($sourceLower, 'location:') !== false) {
             // Google Maps Search (Location & Keywords)
@@ -79,6 +85,9 @@ Format:
 ]";
 
         $userPrompt = "Product: {$productDescription}\nTarget Audience: {$targetAudience}\nScraping Source: {$sourceUrl}";
+        if (!empty($websiteData['fetch_success'])) {
+            $userPrompt .= "\nWebsite Content Summary: " . $websiteData['summary'];
+        }
 
         try {
             $response = $this->llm->generate($systemPrompt, $userPrompt, 0.8);
@@ -198,5 +207,141 @@ Format:
                 'description' => 'Organic snack subscription service looking to expand corporate B2B sales through direct outreach.'
             ]
         ];
+    }
+
+    public function scrapeWebsitePage(string $pageUrl): array {
+        $html = $this->fetchUrl($pageUrl, [
+            'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]);
+
+        if ($html === false) {
+            return [
+                'fetch_success' => false,
+                'url' => $pageUrl,
+                'summary' => "Unable to fetch website content from {$pageUrl}.",
+                'error' => 'Unable to retrieve page HTML.'
+            ];
+        }
+
+        libxml_use_internal_errors(true);
+        $dom = new \DOMDocument();
+        $dom->loadHTML($html);
+        $xpath = new \DOMXPath($dom);
+
+        $title = trim($this->getFirstNodeValue($xpath, '//title'));
+        $description = trim($this->getFirstNodeValue($xpath, '//meta[@name="description"]/attribute::content | //meta[@property="og:description"]/attribute::content'));
+        $canonical = trim($this->getFirstNodeValue($xpath, '//link[@rel="canonical"]/attribute::href'));
+        $headings = array_merge(
+            $this->extractTextNodes($xpath, '//h1', 2),
+            $this->extractTextNodes($xpath, '//h2', 3)
+        );
+        $paragraphs = $this->extractTextNodes($xpath, '//p', 4);
+        $topLinks = $this->extractLinks($xpath, 6);
+
+        $summaryParts = [];
+        if (!empty($title)) {
+            $summaryParts[] = "Page title: {$title}.";
+        }
+        if (!empty($description)) {
+            $summaryParts[] = "Meta description: {$description}.";
+        }
+        if (!empty($headings)) {
+            $summaryParts[] = "Headings: " . implode(' | ', $headings) . ".";
+        }
+        if (!empty($paragraphs)) {
+            $summaryParts[] = "Page content preview: " . implode(' ', array_slice($paragraphs, 0, 2));
+        }
+        if (!empty($topLinks)) {
+            $summaryParts[] = "Top page links: " . implode(', ', $topLinks) . ".";
+        }
+
+        $summary = implode(' ', $summaryParts);
+        if (empty(trim($summary))) {
+            $summary = "The page was successfully fetched, but no strong title, description, or text content was extracted.";
+        }
+
+        return [
+            'fetch_success' => true,
+            'url' => $pageUrl,
+            'title' => $title,
+            'description' => $description,
+            'headings' => $headings,
+            'paragraphs' => $paragraphs,
+            'top_links' => $topLinks,
+            'summary' => $summary
+        ];
+    }
+
+    private function fetchUrl(string $url, array $headers = []): string|false {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+
+        $body = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($body === false || $status < 200 || $status >= 400) {
+            return false;
+        }
+
+        return $body;
+    }
+
+    private function getFirstNodeValue(\DOMXPath $xpath, string $expression): string {
+        $node = $xpath->query($expression)->item(0);
+        return $node ? trim($node->nodeValue) : '';
+    }
+
+    private function extractTextNodes(\DOMXPath $xpath, string $expression, int $limit = 3): array {
+        $values = [];
+        $nodes = $xpath->query($expression);
+        if (!$nodes) {
+            return $values;
+        }
+
+        foreach ($nodes as $node) {
+            $text = trim($node->textContent);
+            if ($text !== '') {
+                $values[] = preg_replace('/\s+/u', ' ', $text);
+            }
+            if (count($values) >= $limit) {
+                break;
+            }
+        }
+
+        return $values;
+    }
+
+    private function extractLinks(\DOMXPath $xpath, int $limit = 5): array {
+        $links = [];
+        $nodes = $xpath->query('//a[@href]');
+        if (!$nodes) {
+            return $links;
+        }
+
+        foreach ($nodes as $node) {
+            $href = trim($node->getAttribute('href'));
+            if ($href === '' || strpos($href, 'javascript:') === 0 || strpos($href, '#') === 0) {
+                continue;
+            }
+
+            if (strpos($href, '/') === 0) {
+                $links[] = $href;
+            } elseif (strpos($href, 'http') === 0) {
+                $links[] = $href;
+            }
+
+            if (count($links) >= $limit) {
+                break;
+            }
+        }
+
+        return array_values(array_unique($links));
     }
 }

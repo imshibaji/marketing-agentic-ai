@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
         activeLead: null,
         activeLeadTab: 'email',
         currentUser: null, // { id, username, role }
+        chatIntervalId: null,
         settings: {
             llm_provider: 'gemini',
             gemini_api_key: '',
@@ -26,7 +27,11 @@ document.addEventListener('DOMContentLoaded', () => {
             smtp_host: '', smtp_port: '587',
             smtp_user: '', smtp_pass: '',
             smtp_from_email: '', smtp_from_name: '',
-            whatsapp_token: '', whatsapp_phone_id: ''
+            whatsapp_token: '', whatsapp_phone_id: '',
+            sms_provider: 'mock',
+            sms_twilio_account_sid: '',
+            sms_twilio_auth_token: '',
+            sms_twilio_from_number: ''
         }
     };
 
@@ -77,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsClose: document.getElementById('settings-close'),
         settingsForm: document.getElementById('settings-form'),
         llmProviderSelect: document.getElementById('llm_provider'),
+        smsProviderSelect: document.getElementById('sms_provider'),
         
         newCampaignBtn: document.getElementById('new-campaign-btn'),
         campaignList: document.getElementById('campaign-list'),
@@ -236,9 +242,34 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (tab === 'admin-dashboard') {
             if (tabBtnDashboard) tabBtnDashboard.classList.add('active');
             if (tabAdminDashboard) tabAdminDashboard.classList.remove('hidden');
+            
+            // Set up Dashboard Roles UI
+            const isAdmin = state.currentUser && state.currentUser.role === 'admin';
+            const adminStats = document.getElementById('admin-only-stats');
+            const userStats = document.getElementById('user-only-stats');
+            const adminElements = document.getElementById('admin-only-dashboard-elements');
+            const adminPublisher = document.getElementById('admin-notification-publisher');
+            const welcomeTitle = document.getElementById('dashboard-welcome-title');
+
+            if (adminStats) adminStats.style.display = isAdmin ? 'grid' : 'none';
+            if (userStats) userStats.style.display = !isAdmin ? 'grid' : 'none';
+            if (adminElements) adminElements.style.display = isAdmin ? 'block' : 'none';
+            if (adminPublisher) adminPublisher.style.display = isAdmin ? 'block' : 'none';
+
+            if (welcomeTitle && state.currentUser) {
+                welcomeTitle.innerHTML = `<i class="fas fa-chart-pie" style="color:var(--accent-primary);"></i> Welcome back, ${escapeHtml(state.currentUser.full_name || state.currentUser.username)}!`;
+            }
+
+            // Load resources
+            loadDashboardQuotas();
+            loadNotifications();
+            loadChatMessages();
             loadDashboardStats();
-            loadDashboardActivityLogs();
-            loadDashboardPlans();
+
+            if (isAdmin) {
+                loadDashboardActivityLogs();
+                loadDashboardPlans();
+            }
         }
     }
 
@@ -291,10 +322,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Populate Form Fields
                 for (const key in data.settings) {
                     const el = document.getElementById(key);
-                    if (el) el.value = data.settings[key];
+                    if (el) {
+                        if (el.type === 'checkbox') {
+                            el.checked = (data.settings[key] === '1');
+                        } else {
+                            el.value = data.settings[key];
+                        }
+                    }
                 }
                 toggleLlmFields();
                 if (data.settings.app_name) applyAppName(data.settings.app_name);
+                toggleLlmFields();
+                toggleSmsFields();
+                updateChatSectionVisibility();
             }
         } catch (err) {
             console.error('Failed to load settings', err);
@@ -317,6 +357,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function toggleSmsFields() {
+        const provider = elements.smsProviderSelect ? elements.smsProviderSelect.value : 'mock';
+        document.querySelectorAll('.provider-twilio').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.provider-custom-sms').forEach(el => el.classList.add('hidden'));
+        if (provider === 'twilio') {
+            document.querySelectorAll('.provider-twilio').forEach(el => el.classList.remove('hidden'));
+        } else if (provider === 'custom') {
+            document.querySelectorAll('.provider-custom-sms').forEach(el => el.classList.remove('hidden'));
+        }
+    }
+
     // --------------------------------------------------------
     // USAGE QUOTA + ACTIVE LLM PROVIDERS
     // --------------------------------------------------------
@@ -335,12 +386,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     select.innerHTML = '<option value="">⚠ No LLM configured — contact Admin</option>';
                 } else {
                     data.active_providers.forEach(p => {
-                        const quotaLabel = p.quota !== null
-                            ? ` [${p.used}/${p.quota} runs]`
-                            : ' [Unlimited]';
                         const opt = document.createElement('option');
                         opt.value = p.id;
-                        opt.textContent = p.label + quotaLabel + (p.badge ? ` · ${p.badge}` : '');
+                        opt.textContent = p.model || p.label;
                         select.appendChild(opt);
                     });
                     // Restore previous selection if still available
@@ -350,62 +398,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // ── Render quota bars ─────────────────────────────────────────
-            const panel   = document.getElementById('llm-quota-panel');
-            const barsEl  = document.getElementById('llm-quota-bars');
-            const nameEl  = document.getElementById('llm-quota-plan-name');
-            if (!panel || !barsEl) return;
-
-            if (nameEl) nameEl.textContent = data.plan_name || 'Default Plan';
-
-            const quotaItems = [
-                { key: 'llm',       label: 'AI Runs',   icon: 'fa-brain',          color: '#6366f1' },
-                { key: 'campaigns', label: 'Campaigns', icon: 'fa-bullhorn',       color: '#8b5cf6' },
-                { key: 'leads',     label: 'Contacts',  icon: 'fa-address-book',   color: '#06b6d4' },
-                { key: 'email',     label: 'Emails',    icon: 'fa-envelope',       color: '#10b981' },
-                { key: 'whatsapp',  label: 'WhatsApp',  icon: 'fa-whatsapp fab',   color: '#25d366' },
-            ];
-
-            barsEl.innerHTML = '';
-            quotaItems.forEach(item => {
-                const u = data.usage[item.key];
-                if (!u) return;
-                const pct     = u.limit > 0 ? Math.min(100, Math.round((u.used / u.limit) * 100)) : 0;
-                const remain  = u.limit - u.used;
-                const isWarn  = pct >= 80;
-                const barColor = isWarn ? (pct >= 95 ? '#ef4444' : '#f59e0b') : item.color;
-
-                const row = document.createElement('div');
-                row.style.cssText = 'display:flex; flex-direction:column; gap:3px;';
-                row.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:10px; color:var(--text-secondary); display:flex; align-items:center; gap:5px;">
-                            <i class="fas ${item.icon}" style="color:${barColor}; width:12px; text-align:center;"></i>
-                            ${item.label}
-                        </span>
-                        <span style="font-size:10px; font-weight:600; color:${isWarn ? barColor : 'var(--text-primary)'}">
-                            ${u.used} <span style="color:var(--text-muted); font-weight:400;">/ ${u.limit}</span>
-                            <span style="margin-left:4px; color:${barColor}; font-size:9px;">(${remain} left)</span>
-                        </span>
-                    </div>
-                    <div style="height:5px; background:var(--border-color); border-radius:99px; overflow:hidden;">
-                        <div style="height:100%; width:0%; background:${barColor}; border-radius:99px; transition:width 0.6s cubic-bezier(.4,0,.2,1);" data-target="${pct}"></div>
-                    </div>
-                `;
-                barsEl.appendChild(row);
-            });
-
-            panel.style.display = 'flex';
-
-            // Animate bars after paint
-            requestAnimationFrame(() => {
-                barsEl.querySelectorAll('[data-target]').forEach(bar => {
-                    bar.style.width = bar.dataset.target + '%';
-                });
-            });
-
         } catch (err) {
-            console.warn('Failed to load usage quota.', err);
+            console.warn('Failed to load active LLM models.', err);
         }
     }
 
@@ -428,6 +422,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     elements.llmProviderSelect.addEventListener('change', toggleLlmFields);
+    if (elements.smsProviderSelect) {
+        elements.smsProviderSelect.addEventListener('change', toggleSmsFields);
+    }
 
     // NOTE: settingsForm submit is handled by the comprehensive handler added at the bottom of this file.
 
@@ -698,7 +695,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedProvider === 'gemini' && !state.settings.gemini_api_key) {
             if (state.currentUser && state.currentUser.role === 'admin') {
                 alert('Please configure your Gemini API Key in Settings first.');
-                elements.settingsModal.style.display = 'flex';
             } else {
                 alert('Gemini provider is not configured. Please contact an administrator to set the Gemini API Key.');
             }
@@ -979,9 +975,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function executeLeadFinder(sourceUrl, language = '') {
         if (!state.activeCampaignId) return;
 
-        if (state.settings.llm_provider === 'gemini' && !state.settings.gemini_api_key) {
+        const selectedProvider = document.getElementById('campaign-llm-provider')?.value || 'gemini';
+
+        if (selectedProvider === 'gemini' && !state.settings.gemini_api_key) {
             alert('Please configure your Gemini API Key in Settings first.');
-            elements.settingsModal.style.display = 'flex';
             return;
         }
 
@@ -1001,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         appendConsoleLogLine("LeadAgent", "START", "Starting Lead Generation and Qualification SDR Agent pipeline.");
 
-        const eventSource = new EventSource(`api/run-leads.php?id=${state.activeCampaignId}&source_url=${encodeURIComponent(sourceUrl)}&language=${encodeURIComponent(language)}`);
+        const eventSource = new EventSource(`api/run-leads.php?id=${state.activeCampaignId}&source_url=${encodeURIComponent(sourceUrl)}&language=${encodeURIComponent(language)}&llm_provider=${encodeURIComponent(selectedProvider)}`);
 
         eventSource.addEventListener('log', (e) => {
             const data = JSON.parse(e.data);
@@ -1220,6 +1217,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="lead-outreach-tabs">
                 <button class="outreach-tab-btn ${state.activeLeadTab === 'email' ? 'active' : ''}" id="outreach-email-tab"><i class="fas fa-envelope"></i> Email Draft</button>
                 <button class="outreach-tab-btn ${state.activeLeadTab === 'whatsapp' ? 'active' : ''}" id="outreach-whatsapp-tab"><i class="fab fa-whatsapp"></i> WhatsApp Draft</button>
+                <button class="outreach-tab-btn ${state.activeLeadTab === 'sms' ? 'active' : ''}" id="outreach-sms-tab"><i class="fas fa-comment-alt"></i> SMS Draft</button>
             </div>
 
             <textarea class="outreach-content-pane" id="outreach-text-pane" style="width:100%; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); font-family:monospace; font-size:13px; padding:16px; border-radius:var(--border-radius-sm); outline:none; resize:vertical; min-height:220px; line-height:1.5;"></textarea>
@@ -1245,26 +1243,44 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render draft content
         updateOutreachTextPane();
 
+        // Helper to save current active tab's draft in JavaScript memory
+        const saveCurrentTabDraftInMemory = () => {
+            const pane = document.getElementById('outreach-text-pane');
+            if (!pane) return;
+            if (state.activeLeadTab === 'email') {
+                lead.email_draft = pane.value;
+            } else if (state.activeLeadTab === 'whatsapp') {
+                lead.whatsapp_draft = pane.value;
+            } else if (state.activeLeadTab === 'sms') {
+                lead.sms_draft = pane.value;
+            }
+        };
+
         // Setup outreach tabs event listeners
         document.getElementById('outreach-email-tab').addEventListener('click', () => {
-            // Save active whatsapp text if we are switching from whatsapp
-            if (state.activeLeadTab === 'whatsapp') {
-                lead.whatsapp_draft = document.getElementById('outreach-text-pane').value;
-            }
+            saveCurrentTabDraftInMemory();
             state.activeLeadTab = 'email';
             document.getElementById('outreach-email-tab').classList.add('active');
             document.getElementById('outreach-whatsapp-tab').classList.remove('active');
+            document.getElementById('outreach-sms-tab').classList.remove('active');
             updateOutreachTextPane();
         });
 
         document.getElementById('outreach-whatsapp-tab').addEventListener('click', () => {
-            // Save active email text if we are switching from email
-            if (state.activeLeadTab === 'email') {
-                lead.email_draft = document.getElementById('outreach-text-pane').value;
-            }
+            saveCurrentTabDraftInMemory();
             state.activeLeadTab = 'whatsapp';
             document.getElementById('outreach-whatsapp-tab').classList.add('active');
             document.getElementById('outreach-email-tab').classList.remove('active');
+            document.getElementById('outreach-sms-tab').classList.remove('active');
+            updateOutreachTextPane();
+        });
+
+        document.getElementById('outreach-sms-tab').addEventListener('click', () => {
+            saveCurrentTabDraftInMemory();
+            state.activeLeadTab = 'sms';
+            document.getElementById('outreach-sms-tab').classList.add('active');
+            document.getElementById('outreach-email-tab').classList.remove('active');
+            document.getElementById('outreach-whatsapp-tab').classList.remove('active');
             updateOutreachTextPane();
         });
 
@@ -1278,12 +1294,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Save draft button action
         document.getElementById('save-outreach-btn').addEventListener('click', async () => {
-            const activeText = document.getElementById('outreach-text-pane').value;
-            if (state.activeLeadTab === 'email') {
-                lead.email_draft = activeText;
-            } else {
-                lead.whatsapp_draft = activeText;
-            }
+            saveCurrentTabDraftInMemory();
 
             try {
                 const saveBtn = document.getElementById('save-outreach-btn');
@@ -1296,8 +1307,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({
                         action: 'update_drafts',
                         lead_id: lead.id,
-                        email_draft: lead.email_draft,
-                        whatsapp_draft: lead.whatsapp_draft
+                        email_draft: lead.email_draft || '',
+                        whatsapp_draft: lead.whatsapp_draft || '',
+                        sms_draft: lead.sms_draft || ''
                     })
                 });
 
@@ -1320,16 +1332,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Send outreach (simulated)
         document.getElementById('simulate-outreach-btn').addEventListener('click', async () => {
-            const activeText = document.getElementById('outreach-text-pane').value;
-            const channelName = state.activeLeadTab === 'email' ? 'Email' : 'WhatsApp';
+            saveCurrentTabDraftInMemory();
+            const channelName = state.activeLeadTab === 'email' ? 'Email' : (state.activeLeadTab === 'whatsapp' ? 'WhatsApp' : 'SMS');
             const sendBtn = document.getElementById('simulate-outreach-btn');
-
-            // Save current draft text back into lead object before sending
-            if (state.activeLeadTab === 'email') {
-                lead.email_draft = activeText;
-            } else {
-                lead.whatsapp_draft = activeText;
-            }
 
             sendBtn.disabled = true;
             sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
@@ -1340,7 +1345,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         lead_id: lead.id,
-                        type: state.activeLeadTab // 'email' or 'whatsapp'
+                        type: state.activeLeadTab // 'email', 'whatsapp', or 'sms'
                     })
                 });
                 const data = await res.json();
@@ -1456,9 +1461,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!pane || !state.activeLead) return;
 
         if (state.activeLeadTab === 'email') {
-            pane.value = state.activeLead.email_draft;
-        } else {
-            pane.value = state.activeLead.whatsapp_draft;
+            pane.value = state.activeLead.email_draft || '';
+        } else if (state.activeLeadTab === 'whatsapp') {
+            pane.value = state.activeLead.whatsapp_draft || '';
+        } else if (state.activeLeadTab === 'sms') {
+            pane.value = state.activeLead.sms_draft || '';
         }
     }
 
@@ -1596,7 +1603,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const tabBtnDashboard = document.getElementById('tab-btn-dashboard');
             if (tabBtnDashboard) {
-                tabBtnDashboard.classList.toggle('hidden', u.role !== 'admin');
+                tabBtnDashboard.classList.remove('hidden');
             }
 
             const tabBtnUsers = document.getElementById('tab-btn-users');
@@ -1609,12 +1616,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 tabBtnPlans.classList.toggle('hidden', u.role !== 'admin');
             }
 
-            // Set default tab on login
-            if (u.role === 'admin') {
-                switchTab('admin-dashboard');
-            } else {
-                switchTab('campaigns');
-            }
+            // Set default tab on login to unified dashboard
+            switchTab('admin-dashboard');
         } else {
             switchTab('campaigns');
         }
@@ -1626,11 +1629,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (u && u.role === 'admin') {
             loadUsersListForAdmin();
         }
+
+        // Set up Chat auto-polling (every 8 seconds)
+        if (state.chatIntervalId) clearInterval(state.chatIntervalId);
+        state.chatIntervalId = setInterval(() => {
+            const tabAdminDashboard = document.getElementById('tab-admin-dashboard');
+            if (tabAdminDashboard && !tabAdminDashboard.classList.contains('hidden')) {
+                loadChatMessages();
+            }
+        }, 8000);
     }
 
     function showAuthOverlay() {
         elements.authOverlay.style.display = 'flex';
         elements.mainApp.style.display = 'none';
+        if (state.chatIntervalId) {
+            clearInterval(state.chatIntervalId);
+            state.chatIntervalId = null;
+        }
     }
 
     function applyAppName(name) {
@@ -1913,6 +1929,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const whatsappUsage = u.whatsapp_usage || 0;
                     const whatsappLimit = u.whatsapp_limit == -1 ? 'Unlimited' : (u.whatsapp_limit !== undefined ? u.whatsapp_limit : 100);
                     const whatsappRemaining = u.whatsapp_limit == -1 ? 'unlimited' : `${whatsappLimit - whatsappUsage} left`;
+                    const smsUsage = u.sms_usage || 0;
+                    const smsLimit = u.sms_limit == -1 ? 'Unlimited' : (u.sms_limit !== undefined ? u.sms_limit : 100);
+                    const smsRemaining = u.sms_limit == -1 ? 'unlimited' : `${smsLimit - smsUsage} left`;
 
                     tr.innerHTML = `
                         <td style="padding:12px 10px; font-weight:600;">${escapeHtml(u.username)} ${isSelf ? '<span style="font-size:10px; color:var(--accent-primary); font-weight:400;">(You)</span>' : ''}</td>
@@ -1940,6 +1959,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td style="padding:12px 10px;">
                             ${whatsappUsage} / ${whatsappLimit}
                             <br><span style="font-size:10px; color:var(--text-secondary); font-weight:500;">(${whatsappRemaining})</span>
+                        </td>
+                        <td style="padding:12px 10px;">
+                            ${smsUsage} / ${smsLimit}
+                            <br><span style="font-size:10px; color:var(--text-secondary); font-weight:500;">(${smsRemaining})</span>
                         </td>
                         <td style="padding:12px 10px; text-align:right;">
                             <div style="display:inline-flex; gap:6px;">
@@ -2072,7 +2095,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.getElementById('dashboard-plans-tbody');
         if (!tbody) return;
 
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:10px; color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:10px; color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
 
         try {
             const res = await fetch('api/plans.php');
@@ -2080,7 +2103,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 tbody.innerHTML = '';
                 if (data.plans.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:10px; color:var(--text-muted);">No plans.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:10px; color:var(--text-muted);">No plans.</td></tr>';
                     return;
                 }
                 data.plans.forEach(p => {
@@ -2089,6 +2112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const llmLimit = p.llm_limit == -1 ? '∞' : (p.llm_limit !== undefined ? p.llm_limit : 100);
                     const emailLimit = p.email_limit == -1 ? '∞' : (p.email_limit !== undefined ? p.email_limit : 100);
                     const whatsappLimit = p.whatsapp_limit == -1 ? '∞' : (p.whatsapp_limit !== undefined ? p.whatsapp_limit : 100);
+                    const smsLimit = p.sms_limit == -1 ? '∞' : (p.sms_limit !== undefined ? p.sms_limit : 100);
 
                     const tr = document.createElement('tr');
                     tr.style.borderBottom = '1px solid var(--border-color)';
@@ -2099,15 +2123,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td style="padding:8px 4px;">${llmLimit}</td>
                         <td style="padding:8px 4px;">${emailLimit}</td>
                         <td style="padding:8px 4px;">${whatsappLimit}</td>
+                        <td style="padding:8px 4px;">${smsLimit}</td>
                         <td style="padding:8px 4px;"><span class="user-role-badge role-user" style="background:rgba(var(--accent-primary-rgb),0.1); color:var(--accent-primary); border:none; padding:2px 6px; font-size:10px;">${p.user_count}</span></td>
                     `;
                     tbody.appendChild(tr);
                 });
             } else {
-                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:10px; color:var(--accent-error);">Error</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:10px; color:var(--accent-error);">Error</td></tr>`;
             }
         } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:10px; color:var(--accent-error);">Failed</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:10px; color:var(--accent-error);">Failed</td></tr>`;
         }
     }
 
@@ -2384,6 +2409,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const manualLeadReasoning = document.getElementById('manual-lead-reasoning');
     const manualLeadEmailDraft = document.getElementById('manual-lead-email-draft');
     const manualLeadWhatsappDraft = document.getElementById('manual-lead-whatsapp-draft');
+    const manualLeadSmsDraft = document.getElementById('manual-lead-sms-draft');
     const manualLeadError = document.getElementById('manual-lead-error');
     const manualLeadSaveBtn = document.getElementById('manual-lead-save-btn');
     const addManualLeadBtn = document.getElementById('add-manual-lead-btn');
@@ -2414,6 +2440,7 @@ document.addEventListener('DOMContentLoaded', () => {
             manualLeadReasoning.value = 'Manually added';
             manualLeadEmailDraft.value = '';
             manualLeadWhatsappDraft.value = '';
+            manualLeadSmsDraft.value = '';
             manualLeadError.style.display = 'none';
             
             manualLeadModal.style.display = 'flex';
@@ -2449,7 +2476,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 description: manualLeadDesc.value.trim(),
                 reasoning: manualLeadReasoning.value.trim(),
                 email_draft: manualLeadEmailDraft.value.trim(),
-                whatsapp_draft: manualLeadWhatsappDraft.value.trim()
+                whatsapp_draft: manualLeadWhatsappDraft.value.trim(),
+                sms_draft: manualLeadSmsDraft.value.trim()
             };
             if (isEdit) {
                 payload.lead_id = parseInt(elements.manualLeadId.value);
@@ -2550,6 +2578,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const planModalLlm = document.getElementById('plan-modal-llm');
     const planModalEmail = document.getElementById('plan-modal-email');
     const planModalWhatsapp = document.getElementById('plan-modal-whatsapp');
+    const planModalSms = document.getElementById('plan-modal-sms');
     const planModalError = document.getElementById('plan-modal-error');
     const planModalSaveBtn = document.getElementById('plan-modal-save-btn');
     const planModalTitle = document.getElementById('plan-modal-title');
@@ -2577,7 +2606,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (data.plans.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:15px; color:var(--text-muted);">No plans found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:15px; color:var(--text-muted);">No plans found.</td></tr>';
                     return;
                 }
 
@@ -2590,6 +2619,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const llmLimit = p.llm_limit == -1 ? 'Unlimited' : (p.llm_limit !== undefined ? p.llm_limit : 100);
                     const emailLimit = p.email_limit == -1 ? 'Unlimited' : (p.email_limit !== undefined ? p.email_limit : 100);
                     const whatsappLimit = p.whatsapp_limit == -1 ? 'Unlimited' : (p.whatsapp_limit !== undefined ? p.whatsapp_limit : 100);
+                    const smsLimit = p.sms_limit == -1 ? 'Unlimited' : (p.sms_limit !== undefined ? p.sms_limit : 100);
 
                     tr.innerHTML = `
                         <td style="padding:10px; font-weight:600;">${escapeHtml(p.name)} ${isDefault ? '<span style="font-size:10px; color:var(--accent-primary); font-weight:400;">(System Default)</span>' : ''}</td>
@@ -2598,6 +2628,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td style="padding:10px;">${llmLimit}</td>
                         <td style="padding:10px;">${emailLimit}</td>
                         <td style="padding:10px;">${whatsappLimit}</td>
+                        <td style="padding:10px;">${smsLimit}</td>
                         <td style="padding:10px;"><span class="user-role-badge role-user" style="background:rgba(var(--accent-primary-rgb),0.1); color:var(--accent-primary); border:none; padding:2px 8px;">${p.user_count} users</span></td>
                         <td style="padding:10px; text-align:right;">
                             <div style="display:inline-flex; gap:6px;">
@@ -2641,6 +2672,7 @@ document.addEventListener('DOMContentLoaded', () => {
             planModalLlm.value = '100';
             planModalEmail.value = '100';
             planModalWhatsapp.value = '100';
+            planModalSms.value = '100';
             planModalError.style.display = 'none';
             planModal.style.display = 'flex';
         });
@@ -2655,6 +2687,7 @@ document.addEventListener('DOMContentLoaded', () => {
         planModalLlm.value = plan.llm_limit !== undefined ? plan.llm_limit : 100;
         planModalEmail.value = plan.email_limit !== undefined ? plan.email_limit : 100;
         planModalWhatsapp.value = plan.whatsapp_limit !== undefined ? plan.whatsapp_limit : 100;
+        planModalSms.value = plan.sms_limit !== undefined ? plan.sms_limit : 100;
         planModalError.style.display = 'none';
         planModal.style.display = 'flex';
     }
@@ -2682,7 +2715,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 lead_limit: parseInt(planModalLeads.value),
                 llm_limit: parseInt(planModalLlm.value),
                 email_limit: parseInt(planModalEmail.value),
-                whatsapp_limit: parseInt(planModalWhatsapp.value)
+                whatsapp_limit: parseInt(planModalWhatsapp.value),
+                sms_limit: parseInt(planModalSms.value)
             };
             if (isEdit) {
                 payload.id = parseInt(id);
@@ -2760,6 +2794,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {};
         formData.forEach((value, key) => { payload[key] = value; });
 
+        // Handle checkbox values manually since unchecked checkboxes are omitted from FormData
+        const chatCheckbox = document.getElementById('enable_public_chat');
+        if (chatCheckbox) {
+            payload['enable_public_chat'] = chatCheckbox.checked ? '1' : '0';
+        }
+        const geminiCheckbox = document.getElementById('gemini_active');
+        if (geminiCheckbox) {
+            payload['gemini_active'] = geminiCheckbox.checked ? '1' : '0';
+        }
+        const lmStudioCheckbox = document.getElementById('lm_studio_active');
+        if (lmStudioCheckbox) {
+            payload['lm_studio_active'] = lmStudioCheckbox.checked ? '1' : '0';
+        }
+        const ollamaCheckbox = document.getElementById('ollama_active');
+        if (ollamaCheckbox) {
+            payload['ollama_active'] = ollamaCheckbox.checked ? '1' : '0';
+        }
+
         try {
             const res = await fetch('api/settings.php', {
                 method: 'POST',
@@ -2772,6 +2824,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 elements.settingsModal.style.display = 'none';
                 state.settings = { ...state.settings, ...payload };
                 if (payload.app_name) applyAppName(payload.app_name);
+                updateChatSectionVisibility();
             } else {
                 alert('Error: ' + (data.error || 'Save failed.'));
             }
@@ -2970,6 +3023,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset tab UI
         document.getElementById('contact-modal-tab-email').classList.add('active');
         document.getElementById('contact-modal-tab-whatsapp').classList.remove('active');
+        document.getElementById('contact-modal-tab-sms').classList.remove('active');
 
         updateModalDraftText();
 
@@ -2982,8 +3036,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (activeModalContactTab === 'email') {
             textarea.value = activeModalContact.email_draft || 'No email draft available.';
-        } else {
+        } else if (activeModalContactTab === 'whatsapp') {
             textarea.value = activeModalContact.whatsapp_draft || 'No WhatsApp draft available.';
+        } else if (activeModalContactTab === 'sms') {
+            textarea.value = activeModalContact.sms_draft || 'No SMS draft available.';
         }
     }
 
@@ -3017,6 +3073,7 @@ document.addEventListener('DOMContentLoaded', () => {
             activeModalContactTab = 'email';
             modalTabEmail.classList.add('active');
             document.getElementById('contact-modal-tab-whatsapp').classList.remove('active');
+            document.getElementById('contact-modal-tab-sms').classList.remove('active');
             updateModalDraftText();
         });
     }
@@ -3026,6 +3083,17 @@ document.addEventListener('DOMContentLoaded', () => {
             activeModalContactTab = 'whatsapp';
             modalTabWhatsapp.classList.add('active');
             document.getElementById('contact-modal-tab-email').classList.remove('active');
+            document.getElementById('contact-modal-tab-sms').classList.remove('active');
+            updateModalDraftText();
+        });
+    }
+    const modalTabSms = document.getElementById('contact-modal-tab-sms');
+    if (modalTabSms) {
+        modalTabSms.addEventListener('click', () => {
+            activeModalContactTab = 'sms';
+            modalTabSms.classList.add('active');
+            document.getElementById('contact-modal-tab-email').classList.remove('active');
+            document.getElementById('contact-modal-tab-whatsapp').classList.remove('active');
             updateModalDraftText();
         });
     }
@@ -3041,6 +3109,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 }).catch(() => {
                     showToast('Failed to copy draft.', true);
                 });
+            }
+        });
+    }
+
+    // Modal Send Outreach Button handler
+    const modalSendBtn = document.getElementById('contact-modal-send-btn');
+    if (modalSendBtn) {
+        modalSendBtn.addEventListener('click', async () => {
+            if (!activeModalContact) return;
+            const channelName = activeModalContactTab === 'email' ? 'Email' : (activeModalContactTab === 'whatsapp' ? 'WhatsApp' : 'SMS');
+
+            modalSendBtn.disabled = true;
+            modalSendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+            try {
+                const res = await fetch('api/outreach.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lead_id: activeModalContact.id,
+                        type: activeModalContactTab
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`✓ ${channelName} outreach sent! ${data.message}`);
+                    activeModalContact.status = 'OUTREACHED';
+                    loadContactsDirectory();
+                    loadLeadsCrmData();
+                } else {
+                    alert(`Send failed: ${data.error || 'Unknown error'}`);
+                }
+            } catch (err) {
+                alert('Network error sending outreach: ' + err.message);
+            } finally {
+                modalSendBtn.disabled = false;
+                modalSendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Outreach';
             }
         });
     }
@@ -3080,6 +3185,7 @@ document.addEventListener('DOMContentLoaded', () => {
             manualLeadReasoning.value = 'Manually added';
             manualLeadEmailDraft.value = '';
             manualLeadWhatsappDraft.value = '';
+            manualLeadSmsDraft.value = '';
             manualLeadError.style.display = 'none';
 
             // Show owner group only for admins
@@ -3130,6 +3236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         manualLeadReasoning.value = contact.reasoning || '';
         manualLeadEmailDraft.value = contact.email_draft || '';
         manualLeadWhatsappDraft.value = contact.whatsapp_draft || '';
+        manualLeadSmsDraft.value = contact.sms_draft || '';
         manualLeadError.style.display = 'none';
 
         // Show owner group for admins only and populate dropdown
@@ -3270,6 +3377,277 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // --------------------------------------------------------
+    // UNIFIED DASHBOARD HELPERS
+    // --------------------------------------------------------
+
+    function formatMentions(text) {
+        return text.replace(/@([a-zA-Z0-9_-]+)/g, '<span style="color:var(--accent-primary); font-weight:700; background:rgba(99,102,241,0.1); padding:2px 6px; border-radius:4px;">@$1</span>');
+    }
+
+    function updateChatSectionVisibility() {
+        const chatEnabled = (state.settings && state.settings.enable_public_chat === '1');
+        const placeholder = document.getElementById('chat-disabled-placeholder');
+        const container = document.getElementById('chat-room-container');
+        if (placeholder && container) {
+            placeholder.style.display = chatEnabled ? 'none' : 'flex';
+            container.style.display = chatEnabled ? 'flex' : 'none';
+        }
+    }
+
+    async function loadDashboardQuotas() {
+        const container = document.getElementById('dashboard-quota-container');
+        const planBadge = document.getElementById('dashboard-plan-badge');
+        if (!container) return;
+
+        try {
+            const res = await fetch('api/usage.php');
+            const data = await res.json();
+            if (data.success) {
+                if (planBadge) planBadge.textContent = 'Plan: ' + data.plan_name;
+                
+                container.innerHTML = '';
+                const items = [
+                    { key: 'llm', label: 'LLM AI Runs', icon: 'fas fa-brain', color: '#6366F1' },
+                    { key: 'campaigns', label: 'Campaigns', icon: 'fas fa-bullhorn', color: '#06B6D4' },
+                    { key: 'leads', label: 'Leads CRM', icon: 'fas fa-users-rectangle', color: '#10B981' },
+                    { key: 'email', label: 'Emails Sent', icon: 'fas fa-envelope', color: '#F59E0B' },
+                    { key: 'whatsapp', label: 'WhatsApp Sent', icon: 'fab fa-whatsapp', color: '#25D366' },
+                    { key: 'sms', label: 'SMS Sent', icon: 'fas fa-sms', color: '#3B82F6' }
+                ];
+
+                items.forEach(item => {
+                    const usage = data.usage[item.key] || { used: 0, limit: 100 };
+                    const used = usage.used;
+                    const limit = usage.limit;
+                    const remaining = Math.max(0, limit - used);
+                    const pct = Math.min(100, limit > 0 ? (used / limit) * 100 : 0);
+
+                    const card = document.createElement('div');
+                    card.style.cssText = 'background:var(--bg-primary); border:1px solid var(--border-color); border-radius:var(--border-radius-sm); padding:16px; display:flex; flex-direction:column; gap:10px; box-shadow:var(--shadow-sm);';
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-size:12px; font-weight:600; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                                <i class="${item.icon}" style="color:${item.color}; font-size:14px;"></i> ${item.label}
+                            </span>
+                            <span style="font-size:10px; color:var(--text-secondary); font-weight:600;">${pct.toFixed(0)}%</span>
+                        </div>
+                        <div style="background:var(--border-color); height:6px; border-radius:3px; overflow:hidden; position:relative;">
+                            <div style="background:${item.color}; width:0%; height:100%; border-radius:3px; transition:width 0.8s ease-out;" class="quota-bar-fill" data-width="${pct}%"></div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary);">
+                            <span>${used} / ${limit} used</span>
+                            <span style="font-weight:600; color:${remaining > 0 ? 'var(--text-primary)' : 'var(--accent-error)'};">${remaining} left</span>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+
+                // Trigger bar load transition
+                setTimeout(() => {
+                    document.querySelectorAll('.quota-bar-fill').forEach(el => {
+                        el.style.width = el.getAttribute('data-width');
+                    });
+                }, 100);
+            }
+        } catch (e) {
+            console.error('Failed to load dashboard quotas', e);
+        }
+    }
+
+    async function loadNotifications() {
+        const container = document.getElementById('notifications-feed-list');
+        if (!container) return;
+
+        try {
+            const res = await fetch('api/notifications.php');
+            const data = await res.json();
+            if (data.success) {
+                container.innerHTML = '';
+                if (data.notifications.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted); font-style:italic;">No notifications published yet.</div>';
+                    return;
+                }
+
+                data.notifications.forEach(notif => {
+                    const time = new Date(notif.created_at).toLocaleString();
+                    const item = document.createElement('div');
+                    item.style.cssText = 'background:var(--bg-primary); border:1px solid var(--border-color); border-radius:var(--border-radius-sm); padding:14px; display:flex; flex-direction:column; gap:6px; box-shadow:var(--shadow-sm);';
+                    
+                    const roleBadge = notif.sender_role === 'admin' ? 
+                        '<span style="font-size:9px; background:rgba(99,102,241,0.15); color:var(--accent-primary); padding:2px 6px; border-radius:10px; font-weight:600; text-transform:uppercase;">Admin</span>' : '';
+
+                    item.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                            <span style="font-weight:700; font-size:13px; color:var(--text-primary);">${escapeHtml(notif.title)}</span>
+                            <span style="font-size:10px; color:var(--text-muted); white-space:nowrap;">${time}</span>
+                        </div>
+                        <div style="font-size:12px; color:var(--text-secondary); line-height:1.4; white-space:pre-line;">${formatMentions(escapeHtml(notif.message))}</div>
+                        <div style="display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text-muted); margin-top:4px; border-top:1px solid var(--border-color); padding-top:6px;">
+                            <i class="fas fa-user-circle"></i> Published by: <strong>${escapeHtml(notif.sender_username || 'System')}</strong>
+                            ${roleBadge}
+                        </div>
+                    `;
+                    container.appendChild(item);
+                });
+            }
+        } catch (e) {
+            console.error('Failed to load notifications', e);
+        }
+    }
+
+    async function loadChatMessages() {
+        const box = document.getElementById('chat-messages-box');
+        if (!box) return;
+
+        const chatEnabled = (state.settings && state.settings.enable_public_chat === '1');
+        if (!chatEnabled) {
+            updateChatSectionVisibility();
+            return;
+        }
+
+        try {
+            const res = await fetch('api/chats.php');
+            const data = await res.json();
+            if (data.success) {
+                state.settings.enable_public_chat = data.chat_enabled ? '1' : '0';
+                updateChatSectionVisibility();
+
+                if (!data.chat_enabled) return;
+
+                const isAtBottom = box.scrollHeight - box.clientHeight <= box.scrollTop + 60;
+
+                box.innerHTML = '';
+                if (data.messages.length === 0) {
+                    box.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted); font-style:italic;">No messages yet. Start the conversation!</div>';
+                    return;
+                }
+
+                data.messages.forEach(msg => {
+                    const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const isMe = state.currentUser && parseInt(msg.user_id) === parseInt(state.currentUser.id);
+                    
+                    const bubble = document.createElement('div');
+                    bubble.style.cssText = `display:flex; flex-direction:column; gap:2px; max-width:80%; margin-bottom:8px; ${isMe ? 'align-self:flex-end; align-items:flex-end;' : 'align-self:flex-start; align-items:flex-start;'}`;
+
+                    const userColor = msg.role === 'admin' ? 'var(--accent-primary)' : 'var(--accent-secondary)';
+                    const bubbleBg = isMe ? 'var(--accent-primary-gradient)' : 'var(--bg-card)';
+                    const bubbleColor = isMe ? '#ffffff' : 'var(--text-primary)';
+                    const bubbleBorder = isMe ? 'none' : '1px solid var(--border-color)';
+                    const roleBadge = msg.role === 'admin' ? '<span style="font-size:8px; background:rgba(99,102,241,0.2); color:var(--accent-primary); padding:1px 4px; border-radius:4px; font-weight:700; margin-left:4px;">Admin</span>' : '';
+
+                    bubble.innerHTML = `
+                        <div style="font-size:10px; color:var(--text-muted); display:flex; align-items:center; margin-bottom:1px;">
+                            <strong style="color:${isMe ? 'var(--text-primary)' : userColor};">${escapeHtml(msg.username)}</strong>
+                            ${roleBadge}
+                            <span style="font-size:9px; margin-left:6px; color:var(--text-muted);">${time}</span>
+                        </div>
+                        <div style="background:${bubbleBg}; color:${bubbleColor}; border:${bubbleBorder}; padding:8px 12px; border-radius:12px; font-size:12px; word-break:break-word; line-height:1.4; box-shadow:var(--shadow-sm); border-top-${isMe ? 'right' : 'left'}-radius:2px;">
+                            ${escapeHtml(msg.message)}
+                        </div>
+                    `;
+                    box.appendChild(bubble);
+                });
+
+                if (isAtBottom || box.scrollTop === 0) {
+                    box.scrollTop = box.scrollHeight;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load chat messages', e);
+        }
+    }
+
+    // Publish Notification Submit
+    const publishNotifForm = document.getElementById('publish-notification-form');
+    if (publishNotifForm) {
+        publishNotifForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const titleEl = document.getElementById('notification-title');
+            const messageEl = document.getElementById('notification-message');
+            if (!titleEl || !messageEl) return;
+
+            const title = titleEl.value.trim();
+            const message = messageEl.value.trim();
+            if (!title || !message) return;
+
+            try {
+                const res = await fetch('api/notifications.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, message })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Notification published successfully!');
+                    titleEl.value = '';
+                    messageEl.value = '';
+                    loadNotifications();
+                    
+                    if (data.email_mentions && data.email_mentions.length > 0) {
+                        const count = data.email_mentions.length;
+                        const details = data.email_mentions.map(m => `@${m.username} (${m.status})`).join(', ');
+                        showToast(`Sent ${count} mention email(s): ${details}`);
+                    }
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to publish notification.'));
+                }
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            }
+        });
+    }
+
+    // Chat Send message Submit
+    const chatSendForm = document.getElementById('chat-send-form');
+    if (chatSendForm) {
+        chatSendForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const inputEl = document.getElementById('chat-input');
+            if (!inputEl) return;
+
+            const message = inputEl.value.trim();
+            if (!message) return;
+
+            try {
+                const res = await fetch('api/chats.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    inputEl.value = '';
+                    loadChatMessages();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to send chat message.'));
+                }
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            }
+        });
+    }
+
+    // Manual Refresh buttons
+    const refreshNotificationsBtn = document.getElementById('refresh-notifications-btn');
+    if (refreshNotificationsBtn) {
+        refreshNotificationsBtn.addEventListener('click', () => {
+            loadNotifications();
+            showToast('Notifications refreshed.');
+        });
+    }
+
+    const refreshChatBtn = document.getElementById('refresh-chat-btn');
+    if (refreshChatBtn) {
+        refreshChatBtn.addEventListener('click', () => {
+            loadChatMessages();
+            showToast('Chat messages refreshed.');
+        });
+    }
+
+    // Export visibility function globally for toggle config uses
+    window.updateChatSectionVisibility = updateChatSectionVisibility;
 
 });
 

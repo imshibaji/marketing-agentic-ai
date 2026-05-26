@@ -473,10 +473,25 @@ require_once __DIR__ . '/../autoload.php';
             <!-- Right Workspace Pane -->
             <main class="workspace">
                 
-                <!-- Tab 0: Admin Dashboard (Admin Only) -->
+                <!-- Tab 0: Unified Dashboard -->
                 <div id="tab-admin-dashboard" class="workspace-panel hidden">
-                    <!-- Stats Grid -->
-                    <div class="stats-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:20px; margin-bottom:24px;">
+                    <h2 id="dashboard-welcome-title" style="margin-top:0; font-size:22px; display:flex; align-items:center; gap:10px;">
+                        <i class="fas fa-chart-pie" style="color:var(--accent-primary);"></i> Dashboard Overview
+                    </h2>
+
+                    <!-- Dashboard Quotas Section -->
+                    <div class="panel-section card-box" style="margin-bottom:24px; padding:20px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); box-shadow:var(--shadow-sm);">
+                        <h3 style="margin:0 0 16px; font-size:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:10px;">
+                            <span><i class="fas fa-tachometer-alt" style="color:var(--accent-primary); margin-right:6px;"></i> My Resource Quotas & Balances</span>
+                            <span id="dashboard-plan-badge" style="font-size:11px; padding:4px 8px; background:var(--accent-primary-gradient); color:white; border-radius:12px; font-weight:600;">Plan: loading...</span>
+                        </h3>
+                        <div id="dashboard-quota-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+                            <!-- Dynamic Quota Cards filled by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Admin-Only Stats Grid -->
+                    <div id="admin-only-stats" class="stats-grid" style="display:none; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:20px; margin-bottom:24px;">
                         <div class="stat-card card-box" style="display:flex; align-items:center; gap:16px; padding:20px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); box-shadow:var(--shadow-sm);">
                             <div class="stat-icon" style="width:48px; height:48px; border-radius:12px; background:rgba(99,102,241,0.15); color:var(--accent-primary); display:flex; align-items:center; justify-content:center; font-size:20px;"><i class="fas fa-users"></i></div>
                             <div>
@@ -500,47 +515,128 @@ require_once __DIR__ . '/../autoload.php';
                         </div>
                     </div>
 
-                    <!-- Main Dashboard Content Grid -->
-                    <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px;">
-                        <!-- Left Side: Activity Logs -->
-                        <div class="panel-section card-box" style="display:flex; flex-direction:column; gap:16px; max-height:calc(100vh - 280px); background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm);">
-                            <h3 style="margin:0; font-size:18px;"><i class="fas fa-history" style="color:var(--accent-primary); margin-right:6px;"></i> System Activity Logs</h3>
-                            <div id="dashboard-activity-logs" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column; gap:10px; padding-right:4px;">
-                                <!-- Loaded dynamically via JS -->
+                    <!-- User-Only Stats Grid -->
+                    <div id="user-only-stats" class="stats-grid" style="display:none; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:20px; margin-bottom:24px;">
+                        <div class="stat-card card-box" style="display:flex; align-items:center; gap:16px; padding:20px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); box-shadow:var(--shadow-sm);">
+                            <div class="stat-icon" style="width:48px; height:48px; border-radius:12px; background:rgba(6,182,212,0.15); color:var(--accent-secondary); display:flex; align-items:center; justify-content:center; font-size:20px;"><i class="fas fa-bullhorn"></i></div>
+                            <div>
+                                <span style="font-size:11px; text-transform:uppercase; color:var(--text-secondary); font-weight:600; letter-spacing:0.5px;">My Campaigns</span>
+                                <h3 id="stat-user-campaigns" style="font-size:24px; margin:2px 0 0;">0</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card card-box" style="display:flex; align-items:center; gap:16px; padding:20px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); box-shadow:var(--shadow-sm);">
+                            <div class="stat-icon" style="width:48px; height:48px; border-radius:12px; background:rgba(16,185,129,0.15); color:var(--accent-success); display:flex; align-items:center; justify-content:center; font-size:20px;"><i class="fas fa-users-rectangle"></i></div>
+                            <div>
+                                <span style="font-size:11px; text-transform:uppercase; color:var(--text-secondary); font-weight:600; letter-spacing:0.5px;">My Leads CRM</span>
+                                <h3 id="stat-user-leads" style="font-size:24px; margin:2px 0 0;">0</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Split Section: Notifications & Public Chat -->
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:20px; margin-bottom:24px;">
+                        
+                        <!-- Notifications Pane -->
+                        <div class="panel-section card-box" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); min-height:450px; max-height:600px;">
+                            <h3 style="margin:0; font-size:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:10px;">
+                                <span><i class="fas fa-bell" style="color:var(--accent-secondary); margin-right:6px;"></i> System Notifications</span>
+                                <button class="action-icon-button" id="refresh-notifications-btn" title="Refresh Notifications" style="width:28px; height:28px; font-size:12px;">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </h3>
+                            
+                            <!-- Admin Notification Publisher Form -->
+                            <div id="admin-notification-publisher" style="display:none; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:4px;">
+                                <h4 style="margin:0 0 10px; font-size:13px; color:var(--text-primary);">Publish New Notification</h4>
+                                <form id="publish-notification-form" style="display:flex; flex-direction:column; gap:8px;">
+                                    <input type="text" id="notification-title" placeholder="Notification Title" required style="width:100%; padding:8px 12px; font-size:12px; border-radius:var(--border-radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+                                    <textarea id="notification-message" placeholder="Message content... Mention users using @username (sends email)" required style="width:100%; height:60px; padding:8px 12px; font-size:12px; border-radius:var(--border-radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); resize:none;"></textarea>
+                                    <button type="submit" class="btn-primary" style="margin-top:0; padding:8px 12px; font-size:12px; width:fit-content; align-self:flex-end;">
+                                        <i class="fas fa-paper-plane"></i> Publish
+                                    </button>
+                                </form>
+                            </div>
+
+                            <div id="notifications-feed-list" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column; gap:12px; padding-right:4px;">
+                                <!-- Dynamic notifications list -->
                             </div>
                         </div>
 
-                        <!-- Right Side: Quick Actions & Plan Details -->
-                        <div style="display:flex; flex-direction:column; gap:20px;">
-                            <div class="panel-section card-box" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); max-height:250px;">
-                                <h3 style="margin:0; font-size:18px;"><i class="fas fa-rocket" style="color:var(--accent-secondary); margin-right:6px;"></i> Quick Actions</h3>
-                                <div style="display:flex; flex-direction:column; gap:12px;">
-                                    <button class="btn-primary" id="dash-new-campaign-btn" style="width:100%; margin-top:0; padding:12px;"><i class="fas fa-plus"></i> New Campaign</button>
-                                    <button class="btn-secondary" id="dash-view-users-btn" style="width:100%; border-color:var(--accent-primary); color:var(--accent-primary); font-weight:600;"><i class="fas fa-users-cog"></i> Manage Users</button>
-                                    <button class="btn-secondary" id="dash-view-leads-btn" style="width:100%;"><i class="fas fa-users-rectangle"></i> View Leads CRM</button>
+                        <!-- Public Chat Room Pane -->
+                        <div class="panel-section card-box" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); min-height:450px; max-height:600px;">
+                            <h3 style="margin:0; font-size:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:10px;">
+                                <span><i class="fas fa-comments" style="color:var(--accent-success); margin-right:6px;"></i> Public Chat Room</span>
+                                <button class="action-icon-button" id="refresh-chat-btn" title="Refresh Chat" style="width:28px; height:28px; font-size:12px;">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </h3>
+
+                            <!-- Disabled Chat Placeholder -->
+                            <div id="chat-disabled-placeholder" style="display:none; flex-grow:1; flex-direction:column; align-items:center; justify-content:center; color:var(--text-muted); gap:12px; text-align:center;">
+                                <i class="fas fa-lock" style="font-size:36px; color:var(--accent-error);"></i>
+                                <span style="font-size:13px; font-weight:600;">Public Chat is currently disabled by administrator.</span>
+                            </div>
+
+                            <!-- Chat Messages & Input Container -->
+                            <div id="chat-room-container" style="display:flex; flex-direction:column; flex-grow:1; overflow:hidden;">
+                                <div id="chat-messages-box" style="flex-grow:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:10px; margin-bottom:12px; border:1px solid var(--border-color); border-radius:var(--border-radius-sm); background:var(--bg-primary); min-height:220px;">
+                                    <!-- Dynamic chat messages -->
+                                </div>
+                                
+                                <form id="chat-send-form" style="display:flex; gap:8px;">
+                                    <input type="text" id="chat-input" placeholder="Type a message..." required style="flex-grow:1; padding:10px 12px; font-size:12px; border-radius:var(--border-radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+                                    <button type="submit" class="btn-primary" style="margin-top:0; padding:10px 16px; font-size:12px;">
+                                        <i class="fas fa-paper-plane"></i> Send
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Admin-Only Dashboard Elements Section -->
+                    <div id="admin-only-dashboard-elements" style="display:none;">
+                        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px;">
+                            <!-- Left Side: Activity Logs -->
+                            <div class="panel-section card-box" style="display:flex; flex-direction:column; gap:16px; max-height:400px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm);">
+                                <h3 style="margin:0; font-size:16px; border-bottom:1px solid var(--border-color); padding-bottom:10px;"><i class="fas fa-history" style="color:var(--accent-primary); margin-right:6px;"></i> System Activity Logs</h3>
+                                <div id="dashboard-activity-logs" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column; gap:10px; padding-right:4px;">
+                                    <!-- Loaded dynamically via JS -->
                                 </div>
                             </div>
 
-                            <!-- Plan Details Card -->
-                            <div class="panel-section card-box" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); overflow-y:auto; max-height:calc(100vh - 560px);">
-                                <h3 style="margin:0; font-size:18px;"><i class="fas fa-tags" style="color:var(--accent-primary); margin-right:6px;"></i> Plan Details</h3>
-                                <div style="overflow-x:auto;">
-                                    <table class="custom-table" style="width:100%; border-collapse:collapse; text-align:left; font-size:12px;">
-                                        <thead>
-                                            <tr style="border-bottom:1px solid var(--border-color); color:var(--text-secondary); font-weight:600; text-transform:uppercase; font-size:10px; letter-spacing:0.5px;">
-                                                <th style="padding:8px 4px;">Plan Name</th>
-                                                <th style="padding:8px 4px;">Campaigns</th>
-                                                <th style="padding:8px 4px;">Leads</th>
-                                                <th style="padding:8px 4px;">LLM</th>
-                                                <th style="padding:8px 4px;">Email</th>
-                                                <th style="padding:8px 4px;">WhatsApp</th>
-                                                <th style="padding:8px 4px;">Users</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="dashboard-plans-tbody">
-                                            <!-- Loaded dynamically via JS -->
-                                        </tbody>
-                                    </table>
+                            <!-- Right Side: Quick Actions & Plan Details -->
+                            <div style="display:flex; flex-direction:column; gap:20px;">
+                                <div class="panel-section card-box" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); max-height:220px;">
+                                    <h3 style="margin:0; font-size:16px; border-bottom:1px solid var(--border-color); padding-bottom:10px;"><i class="fas fa-rocket" style="color:var(--accent-secondary); margin-right:6px;"></i> Quick Actions</h3>
+                                    <div style="display:flex; flex-direction:column; gap:8px;">
+                                        <button class="btn-primary" id="dash-new-campaign-btn" style="width:100%; margin-top:0; padding:10px;"><i class="fas fa-plus"></i> New Campaign</button>
+                                        <button class="btn-secondary" id="dash-view-users-btn" style="width:100%; border-color:var(--accent-primary); color:var(--accent-primary); font-weight:600; padding:8px;"><i class="fas fa-users-cog"></i> Manage Users</button>
+                                        <button class="btn-secondary" id="dash-view-leads-btn" style="width:100%; padding:8px;"><i class="fas fa-users-rectangle"></i> View Leads CRM</button>
+                                    </div>
+                                </div>
+
+                                <!-- Plan Details Card -->
+                                <div class="panel-section card-box" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); overflow-y:auto; max-height:250px;">
+                                    <h3 style="margin:0; font-size:16px; border-bottom:1px solid var(--border-color); padding-bottom:10px;"><i class="fas fa-tags" style="color:var(--accent-primary); margin-right:6px;"></i> Plan Details</h3>
+                                    <div style="overflow-x:auto;">
+                                        <table class="custom-table" style="width:100%; border-collapse:collapse; text-align:left; font-size:11px;">
+                                            <thead>
+                                                <tr style="border-bottom:1px solid var(--border-color); color:var(--text-secondary); font-weight:600; text-transform:uppercase; font-size:9px; letter-spacing:0.5px;">
+                                                    <th style="padding:6px 2px;">Plan Name</th>
+                                                    <th style="padding:6px 2px;">Campaigns</th>
+                                                    <th style="padding:6px 2px;">Leads</th>
+                                                    <th style="padding:6px 2px;">LLM</th>
+                                                    <th style="padding:6px 2px;">Email</th>
+                                                    <th style="padding:6px 2px;">WhatsApp</th>
+                                                    <th style="padding:6px 2px;">SMS</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="dashboard-plans-tbody">
+                                                <!-- Loaded dynamically via JS -->
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -647,17 +743,6 @@ require_once __DIR__ . '/../autoload.php';
                                     <select id="campaign-llm-provider" class="form-control" style="font-size:12px; padding:4px 8px; height:auto; margin:0; flex-grow:1; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); border-radius:4px;">
                                         <option value="">— Loading active models… —</option>
                                     </select>
-                                </div>
-
-                                <!-- Quota Usage Panel -->
-                                <div id="llm-quota-panel" style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:8px; padding:10px 12px; display:none; flex-direction:column; gap:8px;">
-                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
-                                        <span style="font-size:10px; font-weight:700; letter-spacing:0.5px; color:var(--text-secondary); text-transform:uppercase;"><i class="fas fa-gauge-high"></i> Your Usage Quota</span>
-                                        <span id="llm-quota-plan-name" style="font-size:10px; color:var(--accent-primary); font-weight:600; background:rgba(99,102,241,0.1); padding:2px 8px; border-radius:20px;"></span>
-                                    </div>
-                                    <div id="llm-quota-bars" style="display:flex; flex-direction:column; gap:6px;">
-                                        <!-- Quota bars rendered by JS -->
-                                    </div>
                                 </div>
                             </div>
                             
@@ -943,12 +1028,14 @@ require_once __DIR__ . '/../autoload.php';
                             <div class="lead-outreach-tabs" style="margin-bottom:0;">
                                 <button class="outreach-tab-btn active" id="contact-modal-tab-email"><i class="fas fa-envelope"></i> Email Draft</button>
                                 <button class="outreach-tab-btn" id="contact-modal-tab-whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp Draft</button>
+                                <button class="outreach-tab-btn" id="contact-modal-tab-sms"><i class="fas fa-comment-alt"></i> SMS Draft</button>
                             </div>
                             <textarea id="contact-modal-draft" readonly style="width:100%; height:180px; padding:12px; font-family:monospace; font-size:12px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-color); border-radius:6px; outline:none; resize:none; line-height:1.4;"></textarea>
                         </div>
 
                         <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
                             <button class="btn-secondary" id="contact-modal-copy-btn" style="padding:8px 16px;"><i class="fas fa-copy"></i> Copy Draft</button>
+                            <button class="btn-secondary" id="contact-modal-send-btn" style="border-color:var(--accent-success); color:var(--accent-success); padding:8px 16px;"><i class="fas fa-paper-plane"></i> Send Outreach</button>
                             <button class="btn-primary" id="contact-modal-close-btn" style="padding:8px 16px; margin-top:0;">Close</button>
                         </div>
                     </div>
@@ -978,6 +1065,7 @@ require_once __DIR__ . '/../autoload.php';
                                         <th style="padding:12px 10px;">LLM Usage</th>
                                         <th style="padding:12px 10px;">Emails Sent</th>
                                         <th style="padding:12px 10px;">WhatsApp Sent</th>
+                                        <th style="padding:12px 10px;">SMS Sent</th>
                                         <th style="padding:12px 10px; text-align:right;">Actions</th>
                                     </tr>
                                 </thead>
@@ -1008,6 +1096,7 @@ require_once __DIR__ . '/../autoload.php';
                                         <th style="padding:12px 10px;">LLM Limit</th>
                                         <th style="padding:12px 10px;">Email Limit</th>
                                         <th style="padding:12px 10px;">WhatsApp Limit</th>
+                                        <th style="padding:12px 10px;">SMS Limit</th>
                                         <th style="padding:12px 10px;">Active Users</th>
                                         <th style="padding:12px 10px; text-align:right;">Actions</th>
                                     </tr>
@@ -1040,6 +1129,7 @@ require_once __DIR__ . '/../autoload.php';
                 <button class="settings-tab" data-panel="app-panel"><i class="fas fa-paint-brush"></i> App</button>
                 <button class="settings-tab" data-panel="smtp-panel"><i class="fas fa-envelope"></i> Email SMTP</button>
                 <button class="settings-tab" data-panel="whatsapp-panel"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+                <button class="settings-tab" data-panel="sms-panel"><i class="fas fa-sms"></i> SMS</button>
             </div>
 
             <form id="settings-form">
@@ -1065,29 +1155,71 @@ require_once __DIR__ . '/../autoload.php';
                             <label for="gemini_model">Gemini Model</label>
                             <input type="text" id="gemini_model" name="gemini_model" placeholder="gemini-1.5-flash">
                         </div>
+                        <div class="form-group" style="margin-top:10px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="gemini_active" name="gemini_active" value="1">
+                                <span style="font-weight:600;">Activate Gemini Model</span>
+                            </label>
+                        </div>
                     </div>
 
                     <!-- LM Studio Fields -->
                     <div class="provider-fields provider-lmstudio hidden">
-                        <div class="form-group">
-                            <label for="lm_studio_url">LM Studio URL</label>
-                            <input type="text" id="lm_studio_url" name="lm_studio_url" placeholder="http://localhost:1234/v1">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="lm_studio_url">LM Studio URL</label>
+                                <input type="text" id="lm_studio_url" name="lm_studio_url" placeholder="http://localhost:1234/v1">
+                            </div>
+                            <div class="form-group">
+                                <label for="lm_studio_model">LM Studio Model Name</label>
+                                <input type="text" id="lm_studio_model" name="lm_studio_model" placeholder="qwen2.5-7b-instruct">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="lm_studio_model">LM Studio Model Name</label>
-                            <input type="text" id="lm_studio_model" name="lm_studio_model" placeholder="qwen2.5-7b-instruct">
+                        <div class="form-row" style="margin-top: 10px;">
+                            <div class="form-group">
+                                <label for="lm_studio_api_key">LM Studio API Key (Optional)</label>
+                                <input type="password" id="lm_studio_api_key" name="lm_studio_api_key" placeholder="Enter API Key if required">
+                            </div>
+                            <div class="form-group">
+                                <label for="lm_studio_extra_model">Extra Model Name (Optional)</label>
+                                <input type="text" id="lm_studio_extra_model" name="lm_studio_extra_model" placeholder="e.g. qwen2.5-14b-instruct">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:10px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="lm_studio_active" name="lm_studio_active" value="1">
+                                <span style="font-weight:600;">Activate LM Studio Model</span>
+                            </label>
                         </div>
                     </div>
 
                     <!-- Ollama Fields -->
                     <div class="provider-fields provider-ollama hidden">
-                        <div class="form-group">
-                            <label for="ollama_url">Ollama Server URL</label>
-                            <input type="text" id="ollama_url" name="ollama_url" placeholder="http://localhost:11434">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="ollama_url">Ollama Server URL</label>
+                                <input type="text" id="ollama_url" name="ollama_url" placeholder="http://localhost:11434">
+                            </div>
+                            <div class="form-group">
+                                <label for="ollama_model">Ollama Model Name</label>
+                                <input type="text" id="ollama_model" name="ollama_model" placeholder="llama3">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="ollama_model">Ollama Model Name</label>
-                            <input type="text" id="ollama_model" name="ollama_model" placeholder="llama3">
+                        <div class="form-row" style="margin-top: 10px;">
+                            <div class="form-group">
+                                <label for="ollama_api_key">Ollama API Key (Optional)</label>
+                                <input type="password" id="ollama_api_key" name="ollama_api_key" placeholder="Enter API Key if required">
+                            </div>
+                            <div class="form-group">
+                                <label for="ollama_extra_model">Extra Model Name (Optional)</label>
+                                <input type="text" id="ollama_extra_model" name="ollama_extra_model" placeholder="e.g. llama3.1">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:10px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="ollama_active" name="ollama_active" value="1">
+                                <span style="font-weight:600;">Activate Ollama Model</span>
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -1098,6 +1230,13 @@ require_once __DIR__ . '/../autoload.php';
                         <label for="app_name">Application Name</label>
                         <input type="text" id="app_name" name="app_name" placeholder="e.g. My Marketing Suite">
                         <small style="color:var(--text-muted); font-size:11px;">This name appears in the header and login screen.</small>
+                    </div>
+                    <div class="form-group" style="margin-top:16px;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                            <input type="checkbox" id="enable_public_chat" name="enable_public_chat" value="1">
+                            <span style="font-weight:600;">Enable Public Chat Section</span>
+                        </label>
+                        <small style="color:var(--text-muted); font-size:11px; display:block; margin-top:4px;">Turn off this setting to disable the public chat board for all users and admins.</small>
                     </div>
                 </div>
 
@@ -1156,7 +1295,60 @@ require_once __DIR__ . '/../autoload.php';
                     </p>
                 </div>
 
-
+                <div class="settings-panel" id="sms-panel">
+                    <p style="font-size:12px; color:var(--text-secondary); margin-bottom:16px;">
+                        <i class="fas fa-info-circle"></i> Configure SMS delivery settings. Leave provider set to <strong>mock</strong> to simulate SMS sending locally.
+                    </p>
+                    <div class="form-group">
+                        <label for="sms_provider">SMS Provider</label>
+                        <select id="sms_provider" name="sms_provider">
+                            <option value="mock">Mock SMS (no real messages)</option>
+                            <option value="twilio">Twilio</option>
+                            <option value="custom">Custom SMS Gateway</option>
+                        </select>
+                    </div>
+                    <div class="provider-fields provider-twilio hidden">
+                        <div class="form-group">
+                            <label for="sms_twilio_account_sid">Twilio Account SID</label>
+                            <input type="text" id="sms_twilio_account_sid" name="sms_twilio_account_sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                        </div>
+                        <div class="form-group">
+                            <label for="sms_twilio_auth_token">Twilio Auth Token</label>
+                            <input type="password" id="sms_twilio_auth_token" name="sms_twilio_auth_token" placeholder="your_twilio_auth_token">
+                        </div>
+                        <div class="form-group">
+                            <label for="sms_twilio_from_number">Twilio From Number</label>
+                            <input type="text" id="sms_twilio_from_number" name="sms_twilio_from_number" placeholder="+1234567890">
+                        </div>
+                    </div>
+                    <div class="provider-fields provider-custom-sms hidden" style="display:flex; flex-direction:column; gap:12px;">
+                        <div class="form-group">
+                            <label for="sms_custom_url">Custom API Gateway URL *</label>
+                            <input type="text" id="sms_custom_url" name="sms_custom_url" placeholder="e.g. https://api.gateway.com/send?to={to}&msg={message}">
+                            <small style="font-size:10px; color:var(--text-muted); margin-top:2px; display:block;">Use <code>{to}</code> and <code>{message}</code> as placeholders.</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="sms_custom_method">HTTP Method</label>
+                            <select id="sms_custom_method" name="sms_custom_method">
+                                <option value="POST">POST (Recommended)</option>
+                                <option value="GET">GET</option>
+                                <option value="PUT">PUT</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="sms_custom_headers">HTTP Headers (One per line)</label>
+                            <textarea id="sms_custom_headers" name="sms_custom_headers" placeholder="Authorization: Bearer token-here&#10;Content-Type: application/json" style="height:60px; font-family:monospace; font-size:11px; resize:none; padding:8px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); outline:none;"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="sms_custom_body">HTTP Post Body (Optional for POST)</label>
+                            <textarea id="sms_custom_body" name="sms_custom_body" placeholder='{"phone": "{to}", "text": "{message}"}' style="height:60px; font-family:monospace; font-size:11px; resize:none; padding:8px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); outline:none;"></textarea>
+                            <small style="font-size:10px; color:var(--text-muted); margin-top:2px; display:block;">Placeholders <code>{to}</code> and <code>{message}</code> will be replaced automatically.</small>
+                        </div>
+                    </div>
+                    <p style="font-size:11px; color:var(--text-muted); margin-top:8px;">
+                        Provide the Twilio credentials or Custom SMS Gateway configurations to enable real-time SMS delivery.
+                    </p>
+                </div>
 
                 <button type="submit" class="btn-primary" id="settings-save-btn" style="width: 100%; margin-top: 20px;">
                     <i class="fas fa-save"></i> Save Configuration
@@ -1269,18 +1461,22 @@ require_once __DIR__ . '/../autoload.php';
                     </div>
                 </div>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
-                    <div class="form-group">
-                        <label for="plan-modal-llm" class="label-compact"><i class="fas fa-brain"></i> LLM (-1 = unl)</label>
-                        <input type="number" id="plan-modal-llm" value="100" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="plan-modal-email" class="label-compact"><i class="fas fa-envelope"></i> Email (-1 = unl)</label>
-                        <input type="number" id="plan-modal-email" value="100" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="plan-modal-whatsapp" class="label-compact"><i class="fab fa-whatsapp"></i> WA (-1 = unl)</label>
-                        <input type="number" id="plan-modal-whatsapp" value="100" required>
+<div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px;">
+                            <div class="form-group">
+                                <label for="plan-modal-llm" class="label-compact"><i class="fas fa-brain"></i> LLM (-1 = unl)</label>
+                                <input type="number" id="plan-modal-llm" value="100" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="plan-modal-email" class="label-compact"><i class="fas fa-envelope"></i> Email (-1 = unl)</label>
+                                <input type="number" id="plan-modal-email" value="100" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="plan-modal-whatsapp" class="label-compact"><i class="fab fa-whatsapp"></i> WA (-1 = unl)</label>
+                                <input type="number" id="plan-modal-whatsapp" value="100" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="plan-modal-sms" class="label-compact"><i class="fas fa-sms"></i> SMS (-1 = unl)</label>
+                                <input type="number" id="plan-modal-sms" value="100" required>
                     </div>
                 </div>
 
@@ -1466,6 +1662,11 @@ require_once __DIR__ . '/../autoload.php';
                 <div class="form-group">
                     <label for="manual-lead-whatsapp-draft"><i class="fab fa-whatsapp-square"></i> WhatsApp Draft Outreach</label>
                     <textarea id="manual-lead-whatsapp-draft" placeholder="Write custom WhatsApp outreach draft..." style="height:60px; resize:none; padding:8px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); outline:none; font-family:var(--font-body); font-size:12px;"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="manual-lead-sms-draft"><i class="fas fa-comment-dots"></i> SMS Draft Outreach</label>
+                    <textarea id="manual-lead-sms-draft" placeholder="Write custom SMS outreach draft..." style="height:60px; resize:none; padding:8px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); outline:none; font-family:var(--font-body); font-size:12px;"></textarea>
                 </div>
 
                 <div id="manual-lead-error" style="color:var(--accent-error); font-size:13px; display:none;"></div>

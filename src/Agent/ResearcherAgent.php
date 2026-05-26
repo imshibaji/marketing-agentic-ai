@@ -46,6 +46,18 @@ class ResearcherAgent extends BaseAgent {
         $searchData = $searchTool->search($searchQuery);
         $this->log($campaignId, "SEARCH_TOOL_SUCCESS", "Retrieved monthly search volume: " . $searchData['seo_metrics']['monthly_search_volume'] . ", Competitors: " . implode(', ', $searchData['top_competitors']));
 
+        $websiteSearchContext = '';
+        if ($crawlType === 'website' && !empty($crawlTarget)) {
+            $websiteSearchData = $searchTool->searchWebsite($crawlTarget, $searchQuery);
+            $searchData['website_search'] = $websiteSearchData;
+            $this->log($campaignId, "WEBSITE_SEARCH_TOOL", "Retrieved website search results for '{$crawlTarget}' using " . ($websiteSearchData['real_search_used'] ? $websiteSearchData['search_engine'] : 'simulated data') . ".");
+            $websiteSearchContext = "Website Search Data:\n" .
+                "- Site Query: '{$websiteSearchData['query']}'\n" .
+                "- Search Engine: " . $websiteSearchData['search_engine'] . "\n" .
+                "- Used Real Search: " . ($websiteSearchData['real_search_used'] ? 'Yes' : 'No') . "\n" .
+                "- Top Website Results: " . json_encode(array_slice($websiteSearchData['organic_results'], 0, 3)) . "\n";
+        }
+
         // 3. Format LLM prompts
         $systemPrompt = "You are a senior Market Researcher and SEO Analyst. Your job is to compile a highly analytical, professional Market Research and SEO Report based on product details, target audience, and current search engine indicators.
 
@@ -65,6 +77,7 @@ Target Audience: {$targetAudience}
 Crawl Context:
 {$crawlInstruction}
 
+{$websiteSearchContext}
 Search Engine Metrics:
 - Target Search Query: '{$searchQuery}'
 - Monthly Search Volume: {$searchData['seo_metrics']['monthly_search_volume']}

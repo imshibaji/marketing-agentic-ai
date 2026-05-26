@@ -60,9 +60,17 @@ if ($user['role'] !== 'admin' && $userDetails['plan_leads'] !== -1) {
     }
 }
 
+// Get and update selected LLM provider
+$llmProvider = $_GET['llm_provider'] ?? null;
+if ($llmProvider) {
+    $dbCheck->updateCampaignLlmProvider((int)$campaignId, $llmProvider);
+} else {
+    $llmProvider = $campaignCheck['llm_provider'] ?? 'gemini';
+}
+
 try {
     $db = new DatabaseService();
-    $llm = LlmFactory::create($db);
+    $llm = LlmFactory::create($db, $llmProvider, (int)$user['id']);
 
     $leadAgent = new LeadAgent($llm, $db);
 

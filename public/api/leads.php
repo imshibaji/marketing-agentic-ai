@@ -73,6 +73,7 @@ try {
             $reasoning = trim($input['reasoning'] ?? 'Manually added');
             $emailDraft = trim($input['email_draft'] ?? '');
             $whatsappDraft = trim($input['whatsapp_draft'] ?? '');
+            $smsDraft = trim($input['sms_draft'] ?? '');
 
             $leadId = $db->saveLead(
                 $campaignId,
@@ -88,7 +89,8 @@ try {
                 $whatsappDraft,
                 (int)$user['id'],
                 $source,
-                $mobile
+                $mobile,
+                $smsDraft
             );
 
             // Log activity
@@ -160,6 +162,7 @@ try {
             $reasoning = trim($input['reasoning'] ?? 'Manually added');
             $emailDraft = trim($input['email_draft'] ?? '');
             $whatsappDraft = trim($input['whatsapp_draft'] ?? '');
+            $smsDraft = trim($input['sms_draft'] ?? '');
 
             // Admin can reassign lead owner; non-admin users cannot change ownership
             $newOwnerId = null;
@@ -182,7 +185,8 @@ try {
                 $whatsappDraft,
                 $source,
                 $mobile,
-                $newOwnerId
+                $newOwnerId,
+                $smsDraft
             );
 
             // Log activity
@@ -197,6 +201,7 @@ try {
             $leadId = $input['lead_id'] ?? null;
             $emailDraft = $input['email_draft'] ?? '';
             $whatsappDraft = $input['whatsapp_draft'] ?? '';
+            $smsDraft = $input['sms_draft'] ?? '';
 
             if (!$leadId) {
                 http_response_code(400);
@@ -226,7 +231,7 @@ try {
                 }
             }
 
-            $db->updateLeadDrafts((int)$leadId, $emailDraft, $whatsappDraft);
+            $db->updateLeadDrafts((int)$leadId, $emailDraft, $whatsappDraft, $smsDraft);
             echo json_encode(['success' => true, 'message' => 'Lead outreach drafts updated successfully.']);
             exit;
         }

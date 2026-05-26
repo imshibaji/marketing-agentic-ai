@@ -63,7 +63,7 @@ class LeadAgent extends BaseAgent {
             $systemPrompt = "You are a high-performing Sales Development Representative (SDR) and outbound marketing expert. 
 Your goal is to qualify a lead prospect against a product's Ideal Customer Profile (ICP), score them, and draft personalized outreach.
 
-IMPORTANT: The outreach drafts (`email_draft` and `whatsapp_draft`) must be written entirely in {$outreachLanguage}. Keep the qualification reasoning in English.
+IMPORTANT: The outreach drafts (`email_draft`, `whatsapp_draft`, and `sms_draft`) must be written entirely in {$outreachLanguage}. Keep the qualification reasoning in English.
 
 You will receive details about the product and target audience, along with the prospect's profile.
 
@@ -72,7 +72,8 @@ You MUST respond with ONLY a raw JSON object containing exactly the following ke
   \"score\": \"HIGH\" or \"MEDIUM\" or \"LOW\",
   \"reasoning\": \"A 2-3 sentence explanation of why they are scored this way and how the product fits their needs.\",
   \"email_draft\": \"A personalized, short, compelling outbound sales email written in {$outreachLanguage}. It should have a catchy Subject: line, greet them by name, state the problem they likely face, introduce the product, and end with a soft call-to-action.\",
-  \"whatsapp_draft\": \"A short, friendly, direct WhatsApp message written in {$outreachLanguage}. Use emojis, write conversationally, highlight a single key benefit, and ask a low-friction question like 'Would you be open to a 2-minute chat next week?'\"
+  \"whatsapp_draft\": \"A short, friendly, direct WhatsApp message written in {$outreachLanguage}. Use emojis, write conversationally, highlight a single key benefit, and ask a low-friction question like 'Would you be open to a 2-minute chat next week?'\",
+  \"sms_draft\": \"A very short, punchy SMS outreach message written in {$outreachLanguage}. Must be strictly under 160 characters, direct, friendly, prompting a quick reply.\"
 }
 
 Do not include markdown code block formatting (like ```json). Just the raw JSON.
@@ -111,6 +112,7 @@ Company Description: {$leadDesc}";
                 $reasoning = $qualification['reasoning'] ?? 'Lead fits basic industry parameters.';
                 $emailDraft = $qualification['email_draft'] ?? '';
                 $whatsappDraft = $qualification['whatsapp_draft'] ?? '';
+                $smsDraft = $qualification['sms_draft'] ?? '';
 
             } catch (Exception $e) {
                 // Fallback qualification in case of API issues
@@ -129,6 +131,7 @@ Would you be open to a brief 5-minute call this Thursday to see how we can assis
 Best regards,
 Outreach Team";
                 $whatsappDraft = "Hi {$contactName}! 👋 Hope your day is going well. I saw that {$companyName} is doing great work in {$industry}. We've built an AI system that helps teams automate content creation. Would you be open to a quick 2-minute chat about this? Let me know! 😊";
+                $smsDraft = "Hi {$contactName}, I saw {$companyName} does great work in {$industry}. Open to a quick call about automating content creation? - Outreach Team";
             }
 
             // Save to database
@@ -143,7 +146,11 @@ Outreach Team";
                 $score,
                 $reasoning,
                 $emailDraft,
-                $whatsappDraft
+                $whatsappDraft,
+                null,
+                'agent',
+                null,
+                $smsDraft
             );
 
             $this->log($campaignId, "LEAD_QUALIFIED", "Saved qualified lead '{$companyName}' with score: {$score}");
@@ -160,6 +167,7 @@ Outreach Team";
                 'reasoning' => $reasoning,
                 'email_draft' => $emailDraft,
                 'whatsapp_draft' => $whatsappDraft,
+                'sms_draft' => $smsDraft,
                 'status' => 'GENERATED'
             ];
         }

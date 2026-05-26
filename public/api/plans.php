@@ -55,6 +55,7 @@ try {
         $llmLimit = isset($input['llm_limit']) ? (int)$input['llm_limit'] : 100;
         $emailLimit = isset($input['email_limit']) ? (int)$input['email_limit'] : 100;
         $whatsappLimit = isset($input['whatsapp_limit']) ? (int)$input['whatsapp_limit'] : 100;
+        $smsLimit = isset($input['sms_limit']) ? (int)$input['sms_limit'] : 100;
 
         if (empty($name)) {
             http_response_code(400);
@@ -64,12 +65,12 @@ try {
 
         if ($id) {
             // Update plan
-            $db->updatePlan((int)$id, $name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit);
+            $db->updatePlan((int)$id, $name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit);
             $db->logActivity((int)$user['id'], 'UPDATE_PLAN', "Admin updated plan '{$name}' (ID: {$id})");
             echo json_encode(['success' => true, 'message' => 'Plan updated successfully.']);
         } else {
             // Create plan
-            $planId = $db->createPlan($name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit);
+            $planId = $db->createPlan($name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit);
             $db->logActivity((int)$user['id'], 'CREATE_PLAN', "Admin created plan '{$name}' (ID: {$planId})");
             echo json_encode(['success' => true, 'message' => 'Plan created successfully.', 'plan_id' => $planId]);
         }

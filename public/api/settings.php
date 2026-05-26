@@ -41,6 +41,10 @@ try {
             'lm_studio_model',
             'ollama_url',
             'ollama_model',
+            'lm_studio_api_key',
+            'lm_studio_extra_model',
+            'ollama_api_key',
+            'ollama_extra_model',
             'smtp_host',
             'smtp_port',
             'smtp_user',
@@ -48,7 +52,19 @@ try {
             'smtp_from_email',
             'smtp_from_name',
             'whatsapp_token',
-            'whatsapp_phone_id'
+            'whatsapp_phone_id',
+            'sms_provider',
+            'sms_twilio_account_sid',
+            'sms_twilio_auth_token',
+            'sms_twilio_from_number',
+            'sms_custom_url',
+            'sms_custom_method',
+            'sms_custom_headers',
+            'sms_custom_body',
+            'enable_public_chat',
+            'gemini_active',
+            'lm_studio_active',
+            'ollama_active'
         ];
 
         $settingsToSave = [];
@@ -62,7 +78,7 @@ try {
         echo json_encode(['success' => true, 'message' => 'System settings saved successfully.']);
     } else {
         // GET request — return settings
-        // Non-admins and unauthenticated users can read non-sensitive public settings (app_name only)
+        // Non-admins and unauthenticated users can read non-sensitive public settings
         // Admins get all settings
         $user = AuthService::getCurrentUser();
         $settings = $db->getSettings();
@@ -70,7 +86,11 @@ try {
         if (!$user || $user['role'] !== 'admin') {
             // Return only public safe settings
             echo json_encode(['success' => true, 'settings' => [
-                'app_name' => $settings['app_name'] ?? 'Marketing AI Agent'
+                'app_name' => $settings['app_name'] ?? 'Marketing AI Agent',
+                'enable_public_chat' => $settings['enable_public_chat'] ?? '1',
+                'gemini_active' => $settings['gemini_active'] ?? '1',
+                'lm_studio_active' => $settings['lm_studio_active'] ?? '1',
+                'ollama_active' => $settings['ollama_active'] ?? '1'
             ]]);
             exit;
         }
@@ -81,6 +101,20 @@ try {
             $settings['gemini_api_key_masked'] = substr($key, 0, 4) . '...' . substr($key, -4);
         } else {
             $settings['gemini_api_key_masked'] = '';
+        }
+
+        if (!empty($settings['lm_studio_api_key'])) {
+            $key = $settings['lm_studio_api_key'];
+            $settings['lm_studio_api_key_masked'] = substr($key, 0, 4) . '...' . substr($key, -4);
+        } else {
+            $settings['lm_studio_api_key_masked'] = '';
+        }
+
+        if (!empty($settings['ollama_api_key'])) {
+            $key = $settings['ollama_api_key'];
+            $settings['ollama_api_key_masked'] = substr($key, 0, 4) . '...' . substr($key, -4);
+        } else {
+            $settings['ollama_api_key_masked'] = '';
         }
         // Mask the SMTP password
         if (!empty($settings['smtp_pass'])) {
@@ -94,6 +128,13 @@ try {
         } else {
             $settings['whatsapp_token_masked'] = '';
         }
+
+        if (!empty($settings['sms_twilio_auth_token'])) {
+            $settings['sms_twilio_auth_token_masked'] = substr($settings['sms_twilio_auth_token'], 0, 4) . '...' . substr($settings['sms_twilio_auth_token'], -4);
+        } else {
+            $settings['sms_twilio_auth_token_masked'] = '';
+        }
+
         echo json_encode(['success' => true, 'settings' => $settings]);
     }
 } catch (Exception $e) {

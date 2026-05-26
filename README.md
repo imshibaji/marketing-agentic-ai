@@ -48,6 +48,8 @@ Click the **Gear icon (Settings)** in the top right corner of the dashboard to c
 - **LM Studio**: Run your local LM Studio server (typically `http://localhost:1234/v1`).
 - **Ollama**: Start Ollama on your system (`http://localhost:11434`).
 
+For real website search results, configure a Bing Search API key in your PHP environment using `BING_SEARCH_API_KEY` so the research agent can call live search engine data for site-specific analysis.
+
 ---
 
 ## CLI Diagnostic Scripts

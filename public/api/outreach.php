@@ -14,6 +14,7 @@ use MarketingAgent\Service\DatabaseService;
 use MarketingAgent\Service\AuthService;
 use MarketingAgent\Service\SmtpService;
 use MarketingAgent\Service\WhatsAppService;
+use MarketingAgent\Service\SmsService;
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -34,9 +35,9 @@ try {
     }
 
     $leadId = $input['lead_id'] ?? null;
-    $type = $input['type'] ?? ''; // email or whatsapp
+    $type = $input['type'] ?? ''; // email, whatsapp, or sms
 
-    if (!$leadId || !in_array($type, ['email', 'whatsapp'])) {
+    if (!$leadId || !in_array($type, ['email', 'whatsapp', 'sms'])) {
         throw new Exception("Missing or invalid lead_id or type.");
     }
 
@@ -73,9 +74,13 @@ try {
             if ($userDetails['plan_email'] !== -1 && $userDetails['email_usage'] >= $userDetails['plan_email']) {
                 throw new Exception("Email outreach quota exceeded. You have used {$userDetails['email_usage']} of {$userDetails['plan_email']} allowed emails under your current plan. Please contact an administrator.");
             }
-        } else {
+        } else if ($type === 'whatsapp') {
             if ($userDetails['plan_whatsapp'] !== -1 && $userDetails['whatsapp_usage'] >= $userDetails['plan_whatsapp']) {
                 throw new Exception("WhatsApp outreach quota exceeded. You have used {$userDetails['whatsapp_usage']} of {$userDetails['plan_whatsapp']} allowed messages under your current plan. Please contact an administrator.");
+            }
+        } else if ($type === 'sms') {
+            if ($userDetails['plan_sms'] !== -1 && $userDetails['sms_usage'] >= $userDetails['plan_sms']) {
+                throw new Exception("SMS outreach quota exceeded. You have used {$userDetails['sms_usage']} of {$userDetails['plan_sms']} allowed SMS messages under your current plan. Please contact an administrator.");
             }
         }
     }
@@ -123,7 +128,7 @@ try {
         if ($userDetails) {
             $db->incrementEmailUsage((int)$user['id']);
         }
-    } else {
+    } else if ($type === 'whatsapp') {
         // WhatsApp Outreach
         $toPhone = $lead['whatsapp'];
         $body = $lead['whatsapp_draft'];
@@ -147,6 +152,31 @@ try {
         // Increment WhatsApp Usage
         if ($userDetails) {
             $db->incrementWhatsappUsage((int)$user['id']);
+        }
+    } else if ($type === 'sms') {
+        // SMS Outreach
+        $toPhone = $lead['mobile'] ?? $lead['whatsapp'] ?? '';
+        $body = $lead['sms_draft'] ?? '';
+
+        if (empty($toPhone)) {
+            throw new Exception("Recipient mobile/phone number is empty.");
+        }
+        if (empty($body)) {
+            throw new Exception("SMS draft outreach message is empty.");
+        }
+
+        $smsService = new SmsService($db);
+        $smsService->sendSms($toPhone, $body);
+
+        if (!$smsService->isConfigured()) {
+            $statusText = "[SIMULATED SMS SENT] to {$toPhone} via Mock SMS Gateway.";
+        } else {
+            $statusText = "SMS outreach sent successfully to {$toPhone}!";
+        }
+
+        // Increment SMS Usage
+        if ($userDetails) {
+            $db->incrementSmsUsage((int)$user['id']);
         }
     }
 
