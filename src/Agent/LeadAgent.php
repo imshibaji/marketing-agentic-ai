@@ -53,8 +53,10 @@ class LeadAgent extends BaseAgent {
         foreach ($rawLeads as $index => $lead) {
             $companyName = $lead['company_name'] ?? 'Target Corp';
             $contactName = $lead['contact_name'] ?? 'Decision Maker';
+            $postalAddress = $lead['postal_address'] ?? '';
             $email = $lead['email'] ?? 'contact@domain.com';
             $whatsapp = $lead['whatsapp'] ?? '';
+            $mobile = $lead['mobile'] ?? '';
             $industry = $lead['industry'] ?? 'General';
             $leadDesc = $lead['description'] ?? '';
 
@@ -86,6 +88,7 @@ Target ICP Audience: {$audience}
 LEAD PROFILE:
 Company: {$companyName}
 Contact Person: {$contactName}
+Postal Address: {$postalAddress}
 Industry: {$industry}
 Company Description: {$leadDesc}";
 
@@ -147,15 +150,16 @@ Outreach Team";
                 $reasoning,
                 $emailDraft,
                 $whatsappDraft,
-                null,
+                $campaign['user_id'] ?? null,
                 'agent',
-                null,
-                $smsDraft
+                $mobile,
+                $smsDraft,
+                $postalAddress
             );
 
             $this->log($campaignId, "LEAD_QUALIFIED", "Saved qualified lead '{$companyName}' with score: {$score}");
 
-            $qualifiedLeads[] = [
+            $newLead = [
                 'id' => $leadId,
                 'company_name' => $companyName,
                 'contact_name' => $contactName,
@@ -170,9 +174,18 @@ Outreach Team";
                 'sms_draft' => $smsDraft,
                 'status' => 'GENERATED'
             ];
+
+            // Allow plugins to inspect or act on newly qualified lead
+            \MarketingAgent\Plugin\HookManager::doAction('lead_qualified', $leadId, $campaignId, $newLead);
+
+            $qualifiedLeads[] = $newLead;
         }
 
         $this->log($campaignId, "LEADS_PIPELINE_COMPLETE", "Successfully completed Lead Generation & Qualification workflow. " . count($qualifiedLeads) . " leads generated.");
+        
+        // Allow plugins to act on complete batch of generated leads
+        \MarketingAgent\Plugin\HookManager::doAction('leads_pipeline_complete', $campaignId, $qualifiedLeads);
+
         return $qualifiedLeads;
     }
 }

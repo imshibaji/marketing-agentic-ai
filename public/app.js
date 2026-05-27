@@ -1,8 +1,13 @@
-/**
- * Marketing AI Agentic Automation - App Controller
- */
+// Fire frontend hooks for app_init
+if (window.AppHooks) {
+    window.AppHooks.doAction('app_init');
+}
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Fire frontend hooks for dom_ready
+    if (window.AppHooks) {
+        window.AppHooks.doAction('dom_ready');
+    }
     // State management
     const state = {
         theme: 'dark',
@@ -76,6 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
         tabLeads: document.getElementById('tab-leads'),
         tabBtnCampaigns: document.getElementById('tab-btn-campaigns'),
         tabBtnLeads: document.getElementById('tab-btn-leads'),
+        tabBtnOutreach: document.getElementById('tab-btn-outreach'),
+        tabOutreach: document.getElementById('tab-outreach'),
         
         settingsBtn: document.getElementById('settings-btn'),
         settingsModal: document.getElementById('settings-modal'),
@@ -204,6 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const tabAdminDashboard = document.getElementById('tab-admin-dashboard');
         const tabBtnContacts = document.getElementById('tab-btn-contacts');
         const tabContacts = document.getElementById('tab-contacts');
+        const tabBtnOutreach = document.getElementById('tab-btn-outreach');
+        const tabOutreach = document.getElementById('tab-outreach');
 
         elements.tabBtnCampaigns.classList.remove('active');
         elements.tabBtnLeads.classList.remove('active');
@@ -211,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabBtnPlans) tabBtnPlans.classList.remove('active');
         if (tabBtnDashboard) tabBtnDashboard.classList.remove('active');
         if (tabBtnContacts) tabBtnContacts.classList.remove('active');
+        if (tabBtnOutreach) tabBtnOutreach.classList.remove('active');
 
         elements.tabCampaigns.classList.add('hidden');
         elements.tabLeads.classList.add('hidden');
@@ -218,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabPlans) tabPlans.classList.add('hidden');
         if (tabAdminDashboard) tabAdminDashboard.classList.add('hidden');
         if (tabContacts) tabContacts.classList.add('hidden');
+        if (tabOutreach) tabOutreach.classList.add('hidden');
 
         if (tab === 'campaigns') {
             elements.tabBtnCampaigns.classList.add('active');
@@ -225,11 +236,15 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (tab === 'leads') {
             elements.tabBtnLeads.classList.add('active');
             elements.tabLeads.classList.remove('hidden');
-            loadLeadsCrmData();
+            renderScrapedLeadsList();
         } else if (tab === 'contacts') {
             if (tabBtnContacts) tabBtnContacts.classList.add('active');
             if (tabContacts) tabContacts.classList.remove('hidden');
             loadContactsDirectory();
+        } else if (tab === 'outreach') {
+            if (tabBtnOutreach) tabBtnOutreach.classList.add('active');
+            if (tabOutreach) tabOutreach.classList.remove('hidden');
+            loadOutreachTab();
         } else if (tab === 'users') {
             if (tabBtnUsers) tabBtnUsers.classList.add('active');
             if (tabUsers) tabUsers.classList.remove('hidden');
@@ -270,6 +285,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadDashboardActivityLogs();
                 loadDashboardPlans();
             }
+        }
+
+        if (window.AppHooks) {
+            window.AppHooks.doAction('tab_switched', tab);
         }
     }
 
@@ -398,6 +417,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // ── Populate Scraper LLM dropdown with only active providers ──────────
+            const scraperSelect = document.getElementById('scraper-llm-provider');
+            if (scraperSelect) {
+                const prev = scraperSelect.value;
+                scraperSelect.innerHTML = '';
+                if (!data.active_providers || data.active_providers.length === 0) {
+                    scraperSelect.innerHTML = '<option value="">⚠ No LLM configured — contact Admin</option>';
+                } else {
+                    data.active_providers.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = p.model || p.label;
+                        scraperSelect.appendChild(opt);
+                    });
+                    // Restore previous selection if still available
+                    if (prev && [...scraperSelect.options].some(o => o.value === prev)) {
+                        scraperSelect.value = prev;
+                    }
+                }
+            }
+
+            // ── Populate Outreach LLM dropdown with only active providers ──────────
+            const outreachLlmSelect = document.getElementById('outreach-llm-select');
+            if (outreachLlmSelect) {
+                const prev = outreachLlmSelect.value;
+                outreachLlmSelect.innerHTML = '';
+                if (!data.active_providers || data.active_providers.length === 0) {
+                    outreachLlmSelect.innerHTML = '<option value="">⚠ No LLM configured — contact Admin</option>';
+                } else {
+                    data.active_providers.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = p.model || p.label;
+                        outreachLlmSelect.appendChild(opt);
+                    });
+                    // Restore previous selection if still available
+                    if (prev && [...outreachLlmSelect.options].some(o => o.value === prev)) {
+                        outreachLlmSelect.value = prev;
+                    }
+                }
+            }
+
         } catch (err) {
             console.warn('Failed to load active LLM models.', err);
         }
@@ -407,6 +468,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.currentUser || state.currentUser.role !== 'admin') {
             showToast('Forbidden. Only administrators can open AI Settings.');
             return;
+        }
+        // Reset tabs to default active (LLM Panel) when opening
+        document.querySelectorAll('.settings-tab').forEach(t => {
+            if (t.dataset.panel === 'llm-panel') {
+                t.classList.add('active');
+            } else {
+                t.classList.remove('active');
+            }
+        });
+        document.querySelectorAll('.settings-panel').forEach(p => {
+            if (p.id === 'llm-panel') {
+                p.classList.add('active');
+            } else {
+                p.classList.remove('active');
+            }
+        });
+        const saveBtn = document.getElementById('settings-save-btn');
+        if (saveBtn) {
+            saveBtn.style.display = '';
         }
         elements.settingsModal.style.display = 'flex';
     });
@@ -465,6 +545,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 state.campaigns = data.campaigns;
                 renderCampaignList();
+                if (typeof populateOutreachMiniCampaignSelect === 'function') {
+                    populateOutreachMiniCampaignSelect();
+                }
                 
                 // Persist selection on reload
                 let activeId = localStorage.getItem('active_campaign_id');
@@ -807,25 +890,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (elements.crmLeadSourceType) {
         elements.crmLeadSourceType.addEventListener('change', () => {
             const val = elements.crmLeadSourceType.value;
-            if (val === 'default') {
-                elements.crmSourceTargetContainer.classList.add('hidden');
-                elements.crmSourceSearchContainer.classList.add('hidden');
-                elements.crmSourceTargetInput.required = false;
-                elements.crmSourceLocInput.required = false;
-                elements.crmSourceKwInput.required = false;
-            } else if (val === 'website' || val === 'maps_link') {
+            if (val === 'website' || val === 'maps_link') {
                 elements.crmSourceTargetContainer.classList.remove('hidden');
                 elements.crmSourceSearchContainer.classList.add('hidden');
                 elements.crmSourceTargetInput.required = true;
                 elements.crmSourceLocInput.required = false;
                 elements.crmSourceKwInput.required = false;
-                
                 if (val === 'website') {
                     elements.crmSourceTargetLabel.innerText = 'Target Website Link / URL';
                     elements.crmSourceTargetInput.placeholder = 'e.g. https://example.com';
                 } else {
                     elements.crmSourceTargetLabel.innerText = 'Target Google Maps Link / URL';
-                    elements.crmSourceTargetInput.placeholder = 'e.g. https://google.com/maps/...';
+                    elements.crmSourceTargetInput.placeholder = 'e.g. https://www.google.com/maps/search/doctors+in+kolkata/...';
                 }
             } else if (val === 'maps_search') {
                 elements.crmSourceTargetContainer.classList.add('hidden');
@@ -835,6 +911,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 elements.crmSourceKwInput.required = true;
             }
         });
+        // Dispatch initial change event to set correct visibility states on load
+        elements.crmLeadSourceType.dispatchEvent(new Event('change'));
     }
 
     // New Campaign Form submit
@@ -1051,35 +1129,267 @@ document.addEventListener('DOMContentLoaded', () => {
     if (elements.crmGenerateLeadsBtn) {
         elements.crmGenerateLeadsBtn.addEventListener('click', () => {
             const type = elements.crmLeadSourceType.value;
+            let location = '';
+            let keywords = '';
             let sourceUrl = '';
             
-            if (type === 'default') {
-                // Will default to campaign settings in backend
-                sourceUrl = '';
-            } else if (type === 'website' || type === 'maps_link') {
+            if (type === 'website' || type === 'maps_link') {
                 sourceUrl = elements.crmSourceTargetInput.value.trim();
                 if (!sourceUrl) {
-                    alert('Please enter a target URL.');
+                    alert(type === 'website' ? 'Please enter a target URL.' : 'Please enter a Google Maps URL.');
                     elements.crmSourceTargetInput.focus();
                     return;
                 }
             } else if (type === 'maps_search') {
-                const loc = elements.crmSourceLocInput.value.trim();
-                const kw = elements.crmSourceKwInput.value.trim();
-                if (!loc || !kw) {
+                location = elements.crmSourceLocInput.value.trim();
+                keywords = elements.crmSourceKwInput.value.trim();
+                if (!location || !keywords) {
                     alert('Please enter both Location and Keywords.');
-                    if (!loc) elements.crmSourceLocInput.focus();
+                    if (!location) elements.crmSourceLocInput.focus();
                     else elements.crmSourceKwInput.focus();
                     return;
                 }
-                sourceUrl = `Location: ${loc} | Keywords: ${kw}`;
             }
             
-            const langOverride = elements.crmOutreachLanguage ? elements.crmOutreachLanguage.value : 'default';
-            const language = langOverride === 'default' ? '' : langOverride;
-            
-            executeLeadFinder(sourceUrl, language);
+            executeLeadsScraper(type, location, keywords, sourceUrl);
         });
+    }
+
+    function executeLeadsScraper(sourceType, location, keywords, sourceUrl) {
+        const scraperSelect = document.getElementById('scraper-llm-provider');
+        const selectedProvider = scraperSelect ? (scraperSelect.value || state.settings.llm_provider || 'gemini') : (state.settings.llm_provider || 'gemini');
+        if (selectedProvider === 'gemini' && !state.settings.gemini_api_key) {
+            alert('Please configure your Gemini API Key in Settings first.');
+            return;
+        }
+
+        const btn = elements.crmGenerateLeadsBtn;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scraping...';
+        }
+        
+        if (elements.crmConsoleLog) elements.crmConsoleLog.innerHTML = '';
+        
+        appendConsoleLogLine("LeadsScraper", "START", "Starting Standalone Leads Scraper pipeline.");
+
+        const params = new URLSearchParams({
+            source_type: sourceType,
+            location: location,
+            keywords: keywords,
+            source_url: sourceUrl,
+            llm_provider: selectedProvider
+        });
+
+        const eventSource = new EventSource(`api/run-scraper.php?${params.toString()}`);
+
+        eventSource.addEventListener('log', (e) => {
+            const data = JSON.parse(e.data);
+            appendConsoleLogLine(data.agent, data.action, data.message, data.timestamp);
+        });
+
+        eventSource.addEventListener('complete', (e) => {
+            const data = JSON.parse(e.data);
+            showToast(`Scraper finished and generated ${data.leads.length} prospects!`);
+            eventSource.close();
+            
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-bolt"></i> Run Scraper';
+            }
+            
+            // Save generated leads to state
+            state.scrapedLeads = data.leads.map((l, index) => {
+                return {
+                    id: 'scraped_' + index,
+                    ...l,
+                    saved: false
+                };
+            });
+            state.activeLead = state.scrapedLeads.length > 0 ? state.scrapedLeads[0] : null;
+            renderScrapedLeadsList();
+        });
+
+        eventSource.addEventListener('error', (e) => {
+            let msg = 'Lead scraping failed.';
+            try {
+                const data = JSON.parse(e.data);
+                msg = data.message || msg;
+            } catch(err) {}
+
+            appendConsoleLogLine("LeadsScraper", "FAILED", msg);
+            alert("Scraper agent failed: " + msg);
+            eventSource.close();
+            
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-bolt"></i> Run Scraper';
+            }
+        });
+    }
+
+    function renderScrapedLeadsList() {
+        elements.leadsVerticalList.innerHTML = '';
+        const leads = state.scrapedLeads || [];
+
+        if (leads.length === 0) {
+            elements.leadsVerticalList.innerHTML = '<div style="color:var(--text-muted); font-size:12px; text-align:center; padding:20px; border: 1px dashed var(--border-color); border-radius:6px;">No prospects generated yet.</div>';
+            state.activeLead = null;
+            renderScrapedLeadDetails();
+            return;
+        }
+
+        leads.forEach(lead => {
+            const card = document.createElement('div');
+            card.className = `lead-card ${state.activeLead && state.activeLead.id == lead.id ? 'active' : ''}`;
+            card.setAttribute('data-id', lead.id);
+            
+            const scoreClass = `score-${(lead.score || 'MEDIUM').toLowerCase()}`;
+            
+            card.innerHTML = `
+                <div class="lead-card-header">
+                    <span class="lead-card-company">${escapeHtml(lead.company_name)}</span>
+                    <div style="display:flex; gap:6px;">
+                        <span class="lead-score-badge ${scoreClass}">${lead.score || 'MEDIUM'}</span>
+                        ${lead.saved ? `<span class="campaign-badge badge-completed" style="background:var(--accent-success); color:#fff; border:none; text-transform:lowercase;">saved</span>` : ''}
+                    </div>
+                </div>
+                <div class="lead-card-desc">${escapeHtml(lead.description)}</div>
+                <div class="lead-card-meta">
+                    <span><i class="fas fa-user"></i> ${escapeHtml(lead.contact_name)}</span>
+                    <span>${escapeHtml(lead.industry)}</span>
+                </div>
+            `;
+
+            card.addEventListener('click', () => {
+                state.activeLead = lead;
+                const cards = document.querySelectorAll('.lead-card');
+                cards.forEach(c => {
+                    if (c.getAttribute('data-id') == lead.id) {
+                        c.classList.add('active');
+                    } else {
+                        c.classList.remove('active');
+                    }
+                });
+                renderScrapedLeadDetails();
+            });
+
+            elements.leadsVerticalList.appendChild(card);
+        });
+
+        // Auto-select first if none active
+        const activeInScraped = leads.find(l => state.activeLead && l.id == state.activeLead.id);
+        if (!activeInScraped && leads.length > 0) {
+            state.activeLead = leads[0];
+            renderScrapedLeadDetails();
+        } else if (state.activeLead) {
+            renderScrapedLeadDetails();
+        }
+    }
+
+    function renderScrapedLeadDetails() {
+        const lead = state.activeLead;
+        if (!lead) {
+            elements.leadDetailEmpty.classList.remove('hidden');
+            elements.leadDetailContent.classList.add('hidden');
+            return;
+        }
+
+        elements.leadDetailEmpty.classList.add('hidden');
+        elements.leadDetailContent.classList.remove('hidden');
+
+        const score = lead.score || 'MEDIUM';
+        const scoreClass = `score-${score.toLowerCase()}`;
+
+        let detailsHtml = `
+            <div class="lead-detail-header" style="margin-bottom: 20px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                    <div>
+                        <h4 class="lead-detail-company" style="margin-bottom:6px;">${escapeHtml(lead.company_name)}</h4>
+                        <span class="lead-score-badge ${scoreClass}" style="display:inline-block; width:fit-content; margin-top:2px;">${score} FIT</span>
+                    </div>
+                </div>
+                <div class="lead-detail-contacts">
+                    <span><i class="fas fa-briefcase"></i> <strong>Industry:</strong> ${escapeHtml(lead.industry)}</span>
+                    <span><i class="fas fa-user-tie"></i> <strong>Contact:</strong> ${escapeHtml(lead.contact_name)}</span>
+                    <span><i class="fas fa-envelope"></i> <strong>Email:</strong> ${escapeHtml(lead.email || '—')}</span>
+                    ${lead.whatsapp ? `<span><i class="fab fa-whatsapp"></i> <strong>WhatsApp:</strong> ${escapeHtml(lead.whatsapp)}</span>` : ''}
+                    ${lead.mobile ? `<span><i class="fas fa-phone"></i> <strong>Mobile:</strong> ${escapeHtml(lead.mobile)}</span>` : ''}
+                    ${lead.postal_address ? `<span><i class="fas fa-map-marker-alt"></i> <strong>Postal Address:</strong> ${escapeHtml(lead.postal_address)}</span>` : ''}
+                    <span><i class="fas fa-database"></i> <strong>Data Source:</strong> ${escapeHtml(lead.source || 'scraper')}</span>
+                </div>
+            </div>
+            
+            ${lead.description ? `
+            <div class="lead-detail-description" style="margin-bottom: 16px; font-size:12px; line-height:1.5; color:var(--text-secondary);">
+                <strong>Description / Requirements / Notes:</strong><br>
+                ${escapeHtml(lead.description)}
+            </div>
+            ` : ''}
+
+            <div class="lead-detail-reasoning" style="margin-bottom: 24px;">
+                <strong>SDR AI Qualification Reasoning:</strong><br>
+                ${escapeHtml(lead.reasoning)}
+            </div>
+
+            <div style="margin-top: 30px;">
+                <button class="btn-primary" id="save-scraped-contact-btn" style="width:100%; display:flex; justify-content:center; align-items:center; gap:8px;" ${lead.saved ? 'disabled style="background:var(--border-color); color:var(--text-muted); border:none; cursor:not-allowed;"' : ''}>
+                    <i class="fas ${lead.saved ? 'fa-check' : 'fa-save'}"></i>
+                    ${lead.saved ? 'Saved to Contacts' : 'Save to Contacts'}
+                </button>
+            </div>
+        `;
+
+        elements.leadDetailContent.innerHTML = detailsHtml;
+
+        // Hook up Save to Contacts button
+        const saveBtn = document.getElementById('save-scraped-contact-btn');
+        if (saveBtn && !lead.saved) {
+            saveBtn.addEventListener('click', async () => {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+                try {
+                    const res = await fetch('api/leads.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'add_manual',
+                            campaign_id: '', // standalone lead
+                            company_name: lead.company_name,
+                            contact_name: lead.contact_name,
+                            postal_address: lead.postal_address,
+                            email: lead.email,
+                            whatsapp_number: lead.whatsapp,
+                            mobile: lead.mobile,
+                            source: lead.source || 'scraper',
+                            industry: lead.industry,
+                            score: lead.score,
+                            description: lead.description,
+                            reasoning: lead.reasoning,
+                            email_draft: '',
+                            whatsapp_draft: '',
+                            sms_draft: ''
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('Contact successfully saved to Contacts Directory!');
+                        lead.saved = true;
+                        renderScrapedLeadsList(); // Refresh list to show saved badge and update active details view
+                    } else {
+                        alert('Failed to save contact: ' + (data.error || 'Unknown error'));
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save to Contacts';
+                    }
+                } catch (err) {
+                    alert('Network error saving contact: ' + err.message);
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save"></i> Save to Contacts';
+                }
+            });
+        }
     }
 
     function renderCrmBoard(leads) {
@@ -1195,8 +1505,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="lead-score-badge ${scoreClass}" style="display:inline-block; width:fit-content; margin-top:2px;">${score} FIT</span>
                     </div>
                     <div style="display:flex; gap:8px; align-items:center;">
-                        <button class="btn-secondary" id="edit-lead-btn" style="padding:4px 8px; font-size:11px; height:auto; margin:0;"><i class="fas fa-edit"></i> Edit</button>
-                        <button class="btn-secondary" id="delete-lead-btn" style="padding:4px 8px; font-size:11px; height:auto; margin:0; border-color:var(--accent-error); color:var(--accent-error);"><i class="fas fa-trash-alt"></i> Delete</button>
+                        ${canEditLeadMetadata(lead) ? `
+                            <button class="btn-secondary" id="edit-lead-btn" style="padding:4px 8px; font-size:11px; height:auto; margin:0;"><i class="fas fa-edit"></i> Edit</button>
+                            <button class="btn-secondary" id="delete-lead-btn" style="padding:4px 8px; font-size:11px; height:auto; margin:0; border-color:var(--accent-error); color:var(--accent-error);"><i class="fas fa-trash-alt"></i> Delete</button>
+                        ` : ''}
                     </div>
                 </div>
                 <div class="lead-detail-contacts">
@@ -1205,10 +1517,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span><i class="fas fa-envelope"></i> <strong>Email:</strong> ${escapeHtml(lead.email)}</span>
                     ${lead.whatsapp ? `<span><i class="fab fa-whatsapp"></i> <strong>WhatsApp:</strong> ${escapeHtml(lead.whatsapp)}</span>` : ''}
                     ${lead.mobile ? `<span><i class="fas fa-phone"></i> <strong>Mobile:</strong> ${escapeHtml(lead.mobile)}</span>` : ''}
+                    ${lead.postal_address ? `<span><i class="fas fa-map-marker-alt"></i> <strong>Postal Address:</strong> ${escapeHtml(lead.postal_address)}</span>` : ''}
                     <span><i class="fas fa-database"></i> <strong>Data Source:</strong> ${escapeHtml(lead.source || 'agent')}</span>
                 </div>
             </div>
             
+            ${lead.description ? `
+            <div class="lead-detail-description" style="margin-bottom: 16px; font-size:12px; line-height:1.5; color:var(--text-secondary);">
+                <strong>Description / Requirements / Notes:</strong><br>
+                ${escapeHtml(lead.description)}
+            </div>
+            ` : ''}
+
             <div class="lead-detail-reasoning">
                 <strong>SDR AI Qualification Reasoning:</strong><br>
                 ${escapeHtml(lead.reasoning)}
@@ -1408,13 +1728,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('manual-lead-email').value = lead.email || '';
                 document.getElementById('manual-lead-whatsapp').value = lead.whatsapp || '';
                 document.getElementById('manual-lead-mobile').value = lead.mobile || '';
+                document.getElementById('manual-lead-postal-address').value = lead.postal_address || '';
                 document.getElementById('manual-lead-source').value = lead.source || 'manual';
                 document.getElementById('manual-lead-industry').value = lead.industry || '';
                 document.getElementById('manual-lead-score').value = lead.score || 'MEDIUM';
                 document.getElementById('manual-lead-desc').value = lead.description || '';
                 document.getElementById('manual-lead-reasoning').value = lead.reasoning || '';
-                document.getElementById('manual-lead-email-draft').value = lead.email_draft || '';
-                document.getElementById('manual-lead-whatsapp-draft').value = lead.whatsapp_draft || '';
                 
                 const errEl = document.getElementById('manual-lead-error');
                 if (errEl) errEl.style.display = 'none';
@@ -1501,6 +1820,15 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
+    }
+
+    function canEditLeadMetadata(lead) {
+        if (!lead || !state.currentUser) return false;
+        if (state.currentUser.role === 'admin') return true;
+        if (lead.campaign_id !== null && lead.campaign_id !== '' && lead.campaign_id !== undefined) {
+            return parseInt(lead.campaign_owner_id) === parseInt(state.currentUser.id);
+        }
+        return parseInt(lead.user_id) === parseInt(state.currentUser.id);
     }
 
     // Simple JS Markdown parser for preview rendering
@@ -1863,7 +2191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ----------------------------------------------------
-    // SETTINGS TABS + Save btn visibility
+    // SETTINGS TABS + Save btn visibility + Plugins loader
     // ----------------------------------------------------
     const settingsSaveBtn = document.getElementById('settings-save-btn');
 
@@ -1875,12 +2203,196 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetPanel = document.getElementById(tab.dataset.panel);
             if (targetPanel) targetPanel.classList.add('active');
 
-            // Ensure save button is shown
+            // Hide save button for backup and plugins panels since actions are immediate
             if (settingsSaveBtn) {
-                settingsSaveBtn.style.display = '';
+                if (tab.dataset.panel === 'backup-panel' || tab.dataset.panel === 'plugins-panel') {
+                    settingsSaveBtn.style.display = 'none';
+                    
+                    if (tab.dataset.panel === 'backup-panel') {
+                        // Reset backup sub-tabs to default active (Backup)
+                        document.querySelectorAll('.backup-sub-tab').forEach(st => {
+                            if (st.dataset.subpanel === 'subpanel-backup') {
+                                st.classList.add('active');
+                                st.style.borderBottom = '2px solid var(--accent-primary)';
+                                st.style.color = 'var(--text-primary)';
+                            } else {
+                                st.classList.remove('active');
+                                st.style.borderBottom = '2px solid transparent';
+                                st.style.color = 'var(--text-secondary)';
+                            }
+                        });
+                        document.querySelectorAll('.backup-subpanel-content').forEach(sp => {
+                            sp.style.display = (sp.id === 'subpanel-backup') ? 'block' : 'none';
+                        });
+                    } else if (tab.dataset.panel === 'plugins-panel') {
+                        loadPluginsList();
+                    }
+                } else {
+                    settingsSaveBtn.style.display = '';
+                }
             }
         });
     });
+
+    // ----------------------------------------------------
+    // BACKUP SUB-TABS INTERACTIVE SWITCHING
+    // ----------------------------------------------------
+    document.querySelectorAll('.backup-sub-tab').forEach(subTab => {
+        subTab.addEventListener('click', () => {
+            document.querySelectorAll('.backup-sub-tab').forEach(t => {
+                t.classList.remove('active');
+                t.style.borderBottom = '2px solid transparent';
+                t.style.color = 'var(--text-secondary)';
+            });
+            document.querySelectorAll('.backup-subpanel-content').forEach(p => {
+                p.style.display = 'none';
+            });
+
+            subTab.classList.add('active');
+            subTab.style.borderBottom = '2px solid var(--accent-primary)';
+            subTab.style.color = 'var(--text-primary)';
+
+            const targetSubpanel = document.getElementById(subTab.dataset.subpanel);
+            if (targetSubpanel) {
+                targetSubpanel.style.display = 'block';
+            }
+        });
+    });
+
+    // ----------------------------------------------------
+    // DATABASE BACKUP & RESTORE HANDLERS
+    // ----------------------------------------------------
+    const btnDownloadBackup = document.getElementById('btn-download-backup');
+    if (btnDownloadBackup) {
+        btnDownloadBackup.addEventListener('click', () => {
+            window.location.href = 'api/backup.php';
+        });
+    }
+
+    const btnRestoreBackup = document.getElementById('btn-restore-backup');
+    const restoreDbFile = document.getElementById('restore-db-file');
+    if (btnRestoreBackup && restoreDbFile) {
+        btnRestoreBackup.addEventListener('click', async () => {
+            const file = restoreDbFile.files[0];
+            if (!file) {
+                alert('Please select a valid SQLite database backup file first.');
+                return;
+            }
+
+            const confirmRestore = confirm(
+                'Are you sure you want to restore the database?\n\n' +
+                'WARNING: This will permanently overwrite all current data (users, campaigns, leads, logs, settings) and log you out. This action cannot be undone.'
+            );
+            if (!confirmRestore) {
+                return;
+            }
+
+            // Disable button and show spinner
+            btnRestoreBackup.disabled = true;
+            btnRestoreBackup.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restoring database...';
+
+            const formData = new FormData();
+            formData.append('backup_file', file);
+
+            try {
+                const res = await fetch('api/restore.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('Database restored successfully! Reloading...');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Restore failed: ' + (data.error || 'Unknown error occurred.'));
+                    btnRestoreBackup.disabled = false;
+                    btnRestoreBackup.innerHTML = '<i class="fas fa-file-upload"></i> Restore Backup';
+                }
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+                btnRestoreBackup.disabled = false;
+                btnRestoreBackup.innerHTML = '<i class="fas fa-file-upload"></i> Restore Backup';
+            }
+        });
+    }
+
+    // ----------------------------------------------------
+    // SYSTEM RESET & DEMO DATA HANDLERS
+    // ----------------------------------------------------
+    const btnLoadDemo = document.getElementById('btn-load-demo');
+    if (btnLoadDemo) {
+        btnLoadDemo.addEventListener('click', async () => {
+            const confirmLoad = confirm(
+                'Are you sure you want to load demo data?\n\n' +
+                'WARNING: This will clear all existing campaigns, leads, logs, public chats, and notifications, and replace them with fresh test data. Your user account session will remain active.'
+            );
+            if (!confirmLoad) {
+                return;
+            }
+
+            btnLoadDemo.disabled = true;
+            btnLoadDemo.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading demo...';
+
+            try {
+                const res = await fetch('api/load-demo.php', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast('Demo data loaded successfully! Reloading...');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to load demo data: ' + (data.error || 'Unknown error.'));
+                    btnLoadDemo.disabled = false;
+                    btnLoadDemo.innerHTML = '<i class="fas fa-magic"></i> Load Demo Data';
+                }
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+                btnLoadDemo.disabled = false;
+                btnLoadDemo.innerHTML = '<i class="fas fa-magic"></i> Load Demo Data';
+            }
+        });
+    }
+
+    const btnResetApp = document.getElementById('btn-reset-app');
+    if (btnResetApp) {
+        btnResetApp.addEventListener('click', async () => {
+            const confirmReset = confirm(
+                'Are you sure you want to reset the application?\n\n' +
+                'WARNING: This will completely delete the database and wipe all campaigns, leads, chat history, notifications, and logs. All custom settings will be reset to defaults and you will be logged out. This action is permanent and cannot be undone.'
+            );
+            if (!confirmReset) {
+                return;
+            }
+
+            btnResetApp.disabled = true;
+            btnResetApp.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetting system...';
+
+            try {
+                const res = await fetch('api/reset-app.php', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast('Application reset successfully! Redirecting...');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Reset failed: ' + (data.error || 'Unknown error.'));
+                    btnResetApp.disabled = false;
+                    btnResetApp.innerHTML = '<i class="fas fa-trash-alt"></i> Reset Application';
+                }
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+                btnResetApp.disabled = false;
+                btnResetApp.innerHTML = '<i class="fas fa-trash-alt"></i> Reset Application';
+            }
+        });
+    }
 
     // ----------------------------------------------------
     // USER MANAGEMENT
@@ -2402,14 +2914,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const manualLeadEmail = document.getElementById('manual-lead-email');
     const manualLeadWhatsapp = document.getElementById('manual-lead-whatsapp');
     const manualLeadMobile = document.getElementById('manual-lead-mobile');
+    const manualLeadPostalAddress = document.getElementById('manual-lead-postal-address');
     const manualLeadSource = document.getElementById('manual-lead-source');
     const manualLeadIndustry = document.getElementById('manual-lead-industry');
     const manualLeadScore = document.getElementById('manual-lead-score');
     const manualLeadDesc = document.getElementById('manual-lead-desc');
     const manualLeadReasoning = document.getElementById('manual-lead-reasoning');
-    const manualLeadEmailDraft = document.getElementById('manual-lead-email-draft');
-    const manualLeadWhatsappDraft = document.getElementById('manual-lead-whatsapp-draft');
-    const manualLeadSmsDraft = document.getElementById('manual-lead-sms-draft');
     const manualLeadError = document.getElementById('manual-lead-error');
     const manualLeadSaveBtn = document.getElementById('manual-lead-save-btn');
     const addManualLeadBtn = document.getElementById('add-manual-lead-btn');
@@ -2433,14 +2943,12 @@ document.addEventListener('DOMContentLoaded', () => {
             manualLeadEmail.value = '';
             manualLeadWhatsapp.value = '';
             manualLeadMobile.value = '';
+            if (manualLeadPostalAddress) manualLeadPostalAddress.value = '';
             manualLeadSource.value = 'manual';
             manualLeadIndustry.value = '';
             manualLeadScore.value = 'MEDIUM';
             manualLeadDesc.value = '';
             manualLeadReasoning.value = 'Manually added';
-            manualLeadEmailDraft.value = '';
-            manualLeadWhatsappDraft.value = '';
-            manualLeadSmsDraft.value = '';
             manualLeadError.style.display = 'none';
             
             manualLeadModal.style.display = 'flex';
@@ -2470,14 +2978,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 email: manualLeadEmail.value.trim(),
                 whatsapp_number: manualLeadWhatsapp.value.trim(),
                 mobile: manualLeadMobile.value.trim(),
+                postal_address: manualLeadPostalAddress ? manualLeadPostalAddress.value.trim() : '',
                 source: manualLeadSource.value.trim(),
                 industry: manualLeadIndustry.value.trim(),
                 score: manualLeadScore.value,
                 description: manualLeadDesc.value.trim(),
                 reasoning: manualLeadReasoning.value.trim(),
-                email_draft: manualLeadEmailDraft.value.trim(),
-                whatsapp_draft: manualLeadWhatsappDraft.value.trim(),
-                sms_draft: manualLeadSmsDraft.value.trim()
+                email_draft: '',
+                whatsapp_draft: '',
+                sms_draft: ''
             };
             if (isEdit) {
                 payload.lead_id = parseInt(elements.manualLeadId.value);
@@ -2799,6 +3308,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chatCheckbox) {
             payload['enable_public_chat'] = chatCheckbox.checked ? '1' : '0';
         }
+        const notifCheckbox = document.getElementById('enable_public_notifications');
+        if (notifCheckbox) {
+            payload['enable_public_notifications'] = notifCheckbox.checked ? '1' : '0';
+        }
         const geminiCheckbox = document.getElementById('gemini_active');
         if (geminiCheckbox) {
             payload['gemini_active'] = geminiCheckbox.checked ? '1' : '0';
@@ -2825,6 +3338,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.settings = { ...state.settings, ...payload };
                 if (payload.app_name) applyAppName(payload.app_name);
                 updateChatSectionVisibility();
+                loadUsageAndProviders();
             } else {
                 alert('Error: ' + (data.error || 'Save failed.'));
             }
@@ -2940,24 +3454,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         " onmouseover="this.style.background='linear-gradient(135deg,rgba(99,102,241,0.25),rgba(139,92,246,0.25))';this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(99,102,241,0.3)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(99,102,241,0.12),rgba(139,92,246,0.12))';this.style.transform='none';this.style.boxShadow='none'">
                             <i class="fas fa-eye" style="font-size:12px;"></i>
                         </button>
-                        <div style="width:1px; height:18px; background:var(--border-color); opacity:0.5;"></div>
-                        <button class="user-action-btn contacts-edit-btn" data-id="${c.id}" title="Edit Contact" style="
-                            display:inline-flex; align-items:center; justify-content:center;
-                            width:30px; height:30px; padding:0; border-radius:7px; border:none; cursor:pointer;
-                            background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(5,150,105,0.12));
-                            color:#10b981; transition:all 0.18s ease;
-                        " onmouseover="this.style.background='linear-gradient(135deg,rgba(16,185,129,0.25),rgba(5,150,105,0.25))';this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(16,185,129,0.12),rgba(5,150,105,0.12))';this.style.transform='none';this.style.boxShadow='none'">
-                            <i class="fas fa-pen-to-square" style="font-size:12px;"></i>
-                        </button>
-                        <div style="width:1px; height:18px; background:var(--border-color); opacity:0.5;"></div>
-                        <button class="user-action-btn contacts-delete-btn" data-id="${c.id}" title="Delete Contact" style="
-                            display:inline-flex; align-items:center; justify-content:center;
-                            width:30px; height:30px; padding:0; border-radius:7px; border:none; cursor:pointer;
-                            background:linear-gradient(135deg,rgba(239,68,68,0.1),rgba(220,38,38,0.1));
-                            color:#ef4444; transition:all 0.18s ease;
-                        " onmouseover="this.style.background='linear-gradient(135deg,rgba(239,68,68,0.25),rgba(220,38,38,0.25))';this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(239,68,68,0.3)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(239,68,68,0.1),rgba(220,38,38,0.1))';this.style.transform='none';this.style.boxShadow='none'">
-                            <i class="fas fa-trash-can" style="font-size:12px;"></i>
-                        </button>
+                        ${canEditLeadMetadata(c) ? `
+                            <div style="width:1px; height:18px; background:var(--border-color); opacity:0.5;"></div>
+                            <button class="user-action-btn contacts-edit-btn" data-id="${c.id}" title="Edit Contact" style="
+                                display:inline-flex; align-items:center; justify-content:center;
+                                width:30px; height:30px; padding:0; border-radius:7px; border:none; cursor:pointer;
+                                background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(5,150,105,0.12));
+                                color:#10b981; transition:all 0.18s ease;
+                            " onmouseover="this.style.background='linear-gradient(135deg,rgba(16,185,129,0.25),rgba(5,150,105,0.25))';this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(16,185,129,0.12),rgba(5,150,105,0.12))';this.style.transform='none';this.style.boxShadow='none'">
+                                <i class="fas fa-pen-to-square" style="font-size:12px;"></i>
+                            </button>
+                            <div style="width:1px; height:18px; background:var(--border-color); opacity:0.5;"></div>
+                            <button class="user-action-btn contacts-delete-btn" data-id="${c.id}" title="Delete Contact" style="
+                                display:inline-flex; align-items:center; justify-content:center;
+                                width:30px; height:30px; padding:0; border-radius:7px; border:none; cursor:pointer;
+                                background:linear-gradient(135deg,rgba(239,68,68,0.1),rgba(220,38,38,0.1));
+                                color:#ef4444; transition:all 0.18s ease;
+                            " onmouseover="this.style.background='linear-gradient(135deg,rgba(239,68,68,0.25),rgba(220,38,38,0.25))';this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(239,68,68,0.3)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(239,68,68,0.1),rgba(220,38,38,0.1))';this.style.transform='none';this.style.boxShadow='none'">
+                                <i class="fas fa-trash-can" style="font-size:12px;"></i>
+                            </button>
+                        ` : ''}
                     </div>
                 </td>
             `;
@@ -2973,28 +3489,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 openContactDetailsModal(c);
             });
 
-            tr.querySelector('.contacts-edit-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                openEditContactModal(c);
-            });
+            const editBtn = tr.querySelector('.contacts-edit-btn');
+            if (editBtn) {
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openEditContactModal(c);
+                });
+            }
 
-            tr.querySelector('.contacts-delete-btn').addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (!confirm(`Delete contact "${c.company_name}"? This action cannot be undone.`)) return;
-                try {
-                    const res = await fetch(`api/leads.php?id=${c.id}`, { method: 'DELETE' });
-                    const data = await res.json();
-                    if (data.success) {
-                        showToast('Contact deleted.');
-                        loadContactsDirectory();
-                        loadLeadsCrmData();
-                    } else {
-                        alert('Delete failed: ' + (data.error || 'Unknown error'));
+            const deleteBtn = tr.querySelector('.contacts-delete-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`Delete contact "${c.company_name}"? This action cannot be undone.`)) return;
+                    try {
+                        const res = await fetch(`api/leads.php?id=${c.id}`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast('Contact deleted.');
+                            loadContactsDirectory();
+                            loadLeadsCrmData();
+                        } else {
+                            alert('Delete failed: ' + (data.error || 'Unknown error'));
+                        }
+                    } catch (err) {
+                        alert('Network error deleting contact.');
                     }
-                } catch (err) {
-                    alert('Network error deleting contact.');
-                }
-            });
+                });
+            }
 
             tbody.appendChild(tr);
         });
@@ -3013,6 +3535,22 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('contact-modal-source').textContent = contact.source || 'agent';
         document.getElementById('contact-modal-campaign').textContent = contact.campaign_title || 'Manual Lead';
         document.getElementById('contact-modal-owner').textContent = contact.owner_username || 'System';
+        const contactModalPostalAddress = document.getElementById('contact-modal-postal-address');
+        if (contactModalPostalAddress) {
+            contactModalPostalAddress.textContent = contact.postal_address || '—';
+        }
+        
+        const descContainer = document.getElementById('contact-modal-desc-container');
+        const descEl = document.getElementById('contact-modal-description');
+        if (descEl && descContainer) {
+            if (contact.description && contact.description.trim() !== '') {
+                descEl.textContent = contact.description;
+                descContainer.style.display = 'flex';
+            } else {
+                descContainer.style.display = 'none';
+            }
+        }
+
         document.getElementById('contact-modal-reasoning').textContent = contact.reasoning || 'No qualification report generated.';
 
         const scoreBadge = document.getElementById('contact-modal-score');
@@ -3020,27 +3558,7 @@ document.addEventListener('DOMContentLoaded', () => {
         scoreBadge.textContent = `${score} FIT`;
         scoreBadge.className = `lead-score-badge score-${score.toLowerCase()}`;
 
-        // Reset tab UI
-        document.getElementById('contact-modal-tab-email').classList.add('active');
-        document.getElementById('contact-modal-tab-whatsapp').classList.remove('active');
-        document.getElementById('contact-modal-tab-sms').classList.remove('active');
-
-        updateModalDraftText();
-
         document.getElementById('contact-details-modal').style.display = 'flex';
-    }
-
-    function updateModalDraftText() {
-        const textarea = document.getElementById('contact-modal-draft');
-        if (!textarea || !activeModalContact) return;
-
-        if (activeModalContactTab === 'email') {
-            textarea.value = activeModalContact.email_draft || 'No email draft available.';
-        } else if (activeModalContactTab === 'whatsapp') {
-            textarea.value = activeModalContact.whatsapp_draft || 'No WhatsApp draft available.';
-        } else if (activeModalContactTab === 'sms') {
-            textarea.value = activeModalContact.sms_draft || 'No SMS draft available.';
-        }
     }
 
     // Bind event listeners for Contacts Tab
@@ -3066,89 +3584,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Modal Tab click handlers
-    const modalTabEmail = document.getElementById('contact-modal-tab-email');
-    if (modalTabEmail) {
-        modalTabEmail.addEventListener('click', () => {
-            activeModalContactTab = 'email';
-            modalTabEmail.classList.add('active');
-            document.getElementById('contact-modal-tab-whatsapp').classList.remove('active');
-            document.getElementById('contact-modal-tab-sms').classList.remove('active');
-            updateModalDraftText();
-        });
-    }
-    const modalTabWhatsapp = document.getElementById('contact-modal-tab-whatsapp');
-    if (modalTabWhatsapp) {
-        modalTabWhatsapp.addEventListener('click', () => {
-            activeModalContactTab = 'whatsapp';
-            modalTabWhatsapp.classList.add('active');
-            document.getElementById('contact-modal-tab-email').classList.remove('active');
-            document.getElementById('contact-modal-tab-sms').classList.remove('active');
-            updateModalDraftText();
-        });
-    }
-    const modalTabSms = document.getElementById('contact-modal-tab-sms');
-    if (modalTabSms) {
-        modalTabSms.addEventListener('click', () => {
-            activeModalContactTab = 'sms';
-            modalTabSms.classList.add('active');
-            document.getElementById('contact-modal-tab-email').classList.remove('active');
-            document.getElementById('contact-modal-tab-whatsapp').classList.remove('active');
-            updateModalDraftText();
-        });
-    }
-
-    // Modal Copy Draft Button handler
-    const modalCopyBtn = document.getElementById('contact-modal-copy-btn');
-    if (modalCopyBtn) {
-        modalCopyBtn.addEventListener('click', () => {
-            const textarea = document.getElementById('contact-modal-draft');
-            if (textarea && textarea.value) {
-                navigator.clipboard.writeText(textarea.value).then(() => {
-                    showToast('Draft copied to clipboard!');
-                }).catch(() => {
-                    showToast('Failed to copy draft.', true);
-                });
-            }
-        });
-    }
-
-    // Modal Send Outreach Button handler
-    const modalSendBtn = document.getElementById('contact-modal-send-btn');
-    if (modalSendBtn) {
-        modalSendBtn.addEventListener('click', async () => {
-            if (!activeModalContact) return;
-            const channelName = activeModalContactTab === 'email' ? 'Email' : (activeModalContactTab === 'whatsapp' ? 'WhatsApp' : 'SMS');
-
-            modalSendBtn.disabled = true;
-            modalSendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-
-            try {
-                const res = await fetch('api/outreach.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        lead_id: activeModalContact.id,
-                        type: activeModalContactTab
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(`✓ ${channelName} outreach sent! ${data.message}`);
-                    activeModalContact.status = 'OUTREACHED';
-                    loadContactsDirectory();
-                    loadLeadsCrmData();
-                } else {
-                    alert(`Send failed: ${data.error || 'Unknown error'}`);
-                }
-            } catch (err) {
-                alert('Network error sending outreach: ' + err.message);
-            } finally {
-                modalSendBtn.disabled = false;
-                modalSendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Outreach';
-            }
-        });
-    }
+    // Modal Tab click handlers and buttons removed
 
     const tabBtnContacts = document.getElementById('tab-btn-contacts');
     if (tabBtnContacts) {
@@ -3183,9 +3619,7 @@ document.addEventListener('DOMContentLoaded', () => {
             manualLeadScore.value = 'MEDIUM';
             manualLeadDesc.value = '';
             manualLeadReasoning.value = 'Manually added';
-            manualLeadEmailDraft.value = '';
-            manualLeadWhatsappDraft.value = '';
-            manualLeadSmsDraft.value = '';
+            if (manualLeadPostalAddress) manualLeadPostalAddress.value = '';
             manualLeadError.style.display = 'none';
 
             // Show owner group only for admins
@@ -3234,9 +3668,7 @@ document.addEventListener('DOMContentLoaded', () => {
         manualLeadScore.value = contact.score || 'MEDIUM';
         manualLeadDesc.value = contact.description || '';
         manualLeadReasoning.value = contact.reasoning || '';
-        manualLeadEmailDraft.value = contact.email_draft || '';
-        manualLeadWhatsappDraft.value = contact.whatsapp_draft || '';
-        manualLeadSmsDraft.value = contact.sms_draft || '';
+        if (manualLeadPostalAddress) manualLeadPostalAddress.value = contact.postal_address || '';
         manualLeadError.style.display = 'none';
 
         // Show owner group for admins only and populate dropdown
@@ -3388,6 +3820,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateChatSectionVisibility() {
         const chatEnabled = (state.settings && state.settings.enable_public_chat === '1');
+        const notificationsEnabled = (state.settings && state.settings.enable_public_notifications !== '0');
+
+        const chatPane = document.getElementById('dashboard-chat-pane');
+        const notificationsPane = document.getElementById('dashboard-notifications-pane');
+
+        if (chatPane) {
+            chatPane.style.display = chatEnabled ? 'flex' : 'none';
+        }
+        if (notificationsPane) {
+            notificationsPane.style.display = notificationsEnabled ? 'flex' : 'none';
+        }
+
         const placeholder = document.getElementById('chat-disabled-placeholder');
         const container = document.getElementById('chat-room-container');
         if (placeholder && container) {
@@ -3478,10 +3922,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     const roleBadge = notif.sender_role === 'admin' ? 
                         '<span style="font-size:9px; background:rgba(99,102,241,0.15); color:var(--accent-primary); padding:2px 6px; border-radius:10px; font-weight:600; text-transform:uppercase;">Admin</span>' : '';
 
+                    const isAdmin = state.currentUser && state.currentUser.role === 'admin';
+                    const deleteBtn = isAdmin ? `
+                        <button class="delete-notification-btn" data-id="${notif.id}" title="Remove Notification" style="border:none; background:transparent; color:var(--accent-error); cursor:pointer; font-size:11px; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; transition: all 0.2s ease;">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    ` : '';
+
                     item.innerHTML = `
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
                             <span style="font-weight:700; font-size:13px; color:var(--text-primary);">${escapeHtml(notif.title)}</span>
-                            <span style="font-size:10px; color:var(--text-muted); white-space:nowrap;">${time}</span>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-size:10px; color:var(--text-muted); white-space:nowrap;">${time}</span>
+                                ${deleteBtn}
+                            </div>
                         </div>
                         <div style="font-size:12px; color:var(--text-secondary); line-height:1.4; white-space:pre-line;">${formatMentions(escapeHtml(notif.message))}</div>
                         <div style="display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text-muted); margin-top:4px; border-top:1px solid var(--border-color); padding-top:6px;">
@@ -3489,6 +3943,29 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${roleBadge}
                         </div>
                     `;
+
+                    const delBtnEl = item.querySelector('.delete-notification-btn');
+                    if (delBtnEl) {
+                        delBtnEl.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            if (!confirm('Are you sure you want to remove this notification?')) return;
+                            try {
+                                const deleteRes = await fetch(`api/notifications.php?id=${notif.id}`, {
+                                    method: 'DELETE'
+                                });
+                                const deleteData = await deleteRes.json();
+                                if (deleteData.success) {
+                                    showToast('Notification removed successfully.');
+                                    loadNotifications();
+                                } else {
+                                    alert('Error: ' + (deleteData.error || 'Failed to remove notification'));
+                                }
+                            } catch (err) {
+                                alert('Request failed: ' + err.message);
+                            }
+                        });
+                    }
+
                     container.appendChild(item);
                 });
             }
@@ -3646,8 +4123,754 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ----------------------------------------------------
+    // OUTREACH WORKSTATION LOGIC
+    // ----------------------------------------------------
+    state.outreachLeads = [];
+    state.activeOutreachLead = null;
+    state.activeOutreachChannel = 'email'; // 'email', 'whatsapp', 'sms'
+
+    const outreachCampaignSelect = document.getElementById('outreach-campaign-select');
+    const outreachLlmSelect = document.getElementById('outreach-llm-select');
+    const outreachContactsList = document.getElementById('outreach-contacts-list');
+    const outreachContactsCount = document.getElementById('outreach-contacts-count');
+    const outreachEmptyState = document.getElementById('outreach-empty-state');
+    const outreachWorkspaceContent = document.getElementById('outreach-workspace-content');
+    
+    const outreachTextarea = document.getElementById('outreach-pane-textarea');
+    const outreachGenerateBtn = document.getElementById('outreach-generate-btn');
+    const outreachSaveBtn = document.getElementById('outreach-save-btn');
+    const outreachCopyBtn = document.getElementById('outreach-copy-btn');
+    const outreachSendBtn = document.getElementById('outreach-send-btn');
+
+    const outreachChannelBtns = {
+        email: document.getElementById('outreach-pane-tab-email'),
+        whatsapp: document.getElementById('outreach-pane-tab-whatsapp'),
+        sms: document.getElementById('outreach-pane-tab-sms')
+    };
+
+    // Load campaign select dropdown options and contacts
+    async function loadOutreachTab() {
+        if (!outreachCampaignSelect) return;
+        try {
+            const res = await fetch('api/campaigns.php');
+            const data = await res.json();
+            if (data.success) {
+                state.campaigns = data.campaigns;
+                
+                const prev = outreachCampaignSelect.value;
+                outreachCampaignSelect.innerHTML = '<option value="">— Select Campaign —</option>';
+                data.campaigns.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.title;
+                    outreachCampaignSelect.appendChild(opt);
+                });
+
+                if (prev && [...outreachCampaignSelect.options].some(o => o.value === prev)) {
+                    outreachCampaignSelect.value = prev;
+                } else if (state.activeCampaignId && [...outreachCampaignSelect.options].some(o => o.value == state.activeCampaignId)) {
+                    outreachCampaignSelect.value = state.activeCampaignId;
+                }
+                
+                outreachCampaignSelect.dispatchEvent(new Event('change'));
+            }
+        } catch (err) {
+            console.error('Failed to load campaigns for outreach tab', err);
+        }
+    }
+
+    if (outreachCampaignSelect) {
+        outreachCampaignSelect.addEventListener('change', async () => {
+            const campaignId = outreachCampaignSelect.value;
+            if (!campaignId) {
+                state.outreachLeads = [];
+                renderOutreachLeadsList();
+                return;
+            }
+            try {
+                const res = await fetch(`api/leads.php?campaign_id=${campaignId}`);
+                const data = await res.json();
+                if (data.success) {
+                    state.outreachLeads = data.leads;
+                    renderOutreachLeadsList();
+                } else {
+                    showToast('Failed to load campaign leads.');
+                }
+            } catch (err) {
+                console.error('Error fetching outreach campaign leads', err);
+                showToast('Error loading contacts.');
+            }
+        });
+    }
+
+    function renderOutreachLeadsList() {
+        if (!outreachContactsList) return;
+        outreachContactsList.innerHTML = '';
+        const leads = state.outreachLeads || [];
+        if (outreachContactsCount) {
+            outreachContactsCount.textContent = leads.length;
+        }
+
+        if (leads.length === 0) {
+            outreachContactsList.innerHTML = '<div style="color:var(--text-muted); font-size:12px; text-align:center; padding:20px;">No contacts found in this campaign.</div>';
+            selectOutreachLead(null);
+            return;
+        }
+
+        leads.forEach(lead => {
+            const card = document.createElement('div');
+            card.style.cursor = 'pointer';
+            card.style.padding = '12px';
+            card.style.borderRadius = '6px';
+            card.style.border = '1px solid var(--border-color)';
+            card.style.background = (state.activeOutreachLead && state.activeOutreachLead.id == lead.id) 
+                ? 'rgba(99, 102, 241, 0.15)' 
+                : 'var(--bg-secondary)';
+            card.style.transition = 'all 0.2s ease';
+            card.style.display = 'flex';
+            card.style.flexDirection = 'column';
+            card.style.gap = '4px';
+            card.className = 'outreach-lead-card';
+            card.setAttribute('data-id', lead.id);
+
+            const scoreClass = `score-${(lead.score || 'MEDIUM').toLowerCase()}`;
+            let leadStatus = (lead.status || 'GENERATED').toUpperCase();
+            if (leadStatus === 'GENERATED') leadStatus = 'QUALIFIED';
+
+            let statusClass = 'created';
+            if (leadStatus === 'OUTREACHED') statusClass = 'running';
+            if (leadStatus === 'CLOSED') statusClass = 'completed';
+
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                    <span style="font-weight:600; font-size:13px; color:var(--text-primary); text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">${escapeHtml(lead.company_name)}</span>
+                    <span class="lead-score-badge ${scoreClass}" style="flex-shrink:0;">${lead.score || 'MEDIUM'}</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center;">
+                    <span>Contact: ${escapeHtml(lead.contact_name)}</span>
+                    <span class="campaign-badge badge-${statusClass}" style="font-size:9px; padding:1px 4px;">${leadStatus.toLowerCase()}</span>
+                </div>
+            `;
+
+            card.addEventListener('click', () => {
+                selectOutreachLead(lead);
+                document.querySelectorAll('.outreach-lead-card').forEach(el => {
+                    el.style.background = 'var(--bg-secondary)';
+                });
+                card.style.background = 'rgba(99, 102, 241, 0.15)';
+            });
+
+            outreachContactsList.appendChild(card);
+        });
+
+        // Maintain or select first
+        if (leads.length > 0) {
+            const stillExists = state.activeOutreachLead && leads.some(l => l.id == state.activeOutreachLead.id);
+            if (stillExists) {
+                const currentLead = leads.find(l => l.id == state.activeOutreachLead.id);
+                selectOutreachLead(currentLead);
+                const activeCard = outreachContactsList.querySelector(`.outreach-lead-card[data-id="${currentLead.id}"]`);
+                if (activeCard) activeCard.style.background = 'rgba(99, 102, 241, 0.15)';
+            } else {
+                selectOutreachLead(leads[0]);
+                const firstCard = outreachContactsList.querySelector('.outreach-lead-card');
+                if (firstCard) firstCard.style.background = 'rgba(99, 102, 241, 0.15)';
+            }
+        } else {
+            selectOutreachLead(null);
+        }
+    }
+
+    function selectOutreachLead(lead) {
+        state.activeOutreachLead = lead;
+        if (!lead) {
+            if (outreachEmptyState) outreachEmptyState.classList.remove('hidden');
+            if (outreachWorkspaceContent) outreachWorkspaceContent.classList.add('hidden');
+            return;
+        }
+
+        if (outreachEmptyState) outreachEmptyState.classList.add('hidden');
+        if (outreachWorkspaceContent) outreachWorkspaceContent.classList.remove('hidden');
+
+        // Populate details
+        const elCompany = document.getElementById('outreach-contact-company');
+        const elName = document.getElementById('outreach-contact-name');
+        const elIndustry = document.getElementById('outreach-contact-industry');
+        const elEmail = document.getElementById('outreach-contact-email');
+        const elWhatsapp = document.getElementById('outreach-contact-whatsapp');
+        const elMobile = document.getElementById('outreach-contact-mobile');
+        const elSource = document.getElementById('outreach-contact-source');
+        const elAddress = document.getElementById('outreach-contact-address');
+
+        if (elCompany) elCompany.textContent = lead.company_name || 'N/A';
+        if (elName) elName.textContent = lead.contact_name || 'N/A';
+        if (elIndustry) elIndustry.textContent = lead.industry || 'N/A';
+        if (elEmail) elEmail.textContent = lead.email || 'N/A';
+        if (elWhatsapp) elWhatsapp.textContent = lead.whatsapp || 'N/A';
+        if (elMobile) elMobile.textContent = lead.mobile || 'N/A';
+        if (elSource) elSource.textContent = lead.source || 'N/A';
+        if (elAddress) elAddress.textContent = lead.postal_address || 'N/A';
+
+        const scoreBadge = document.getElementById('outreach-contact-score');
+        if (scoreBadge) {
+            scoreBadge.textContent = (lead.score || 'MEDIUM') + ' FIT';
+            scoreBadge.className = 'lead-score-badge score-' + (lead.score || 'MEDIUM').toLowerCase();
+        }
+
+        const descContainer = document.getElementById('outreach-contact-desc-container');
+        const descEl = document.getElementById('outreach-contact-desc');
+        if (descContainer && descEl) {
+            if (lead.description && lead.description.trim() !== '') {
+                descEl.textContent = lead.description;
+                descContainer.style.display = 'block';
+            } else {
+                descEl.textContent = '';
+                descContainer.style.display = 'none';
+            }
+        }
+
+        renderOutreachChannelText();
+    }
+
+    function renderOutreachChannelText() {
+        const lead = state.activeOutreachLead;
+        if (!lead || !outreachTextarea) return;
+
+        if (state.activeOutreachChannel === 'email') {
+            outreachTextarea.value = lead.email_draft || '';
+        } else if (state.activeOutreachChannel === 'whatsapp') {
+            outreachTextarea.value = lead.whatsapp_draft || '';
+        } else if (state.activeOutreachChannel === 'sms') {
+            outreachTextarea.value = lead.sms_draft || '';
+        }
+    }
+
+    if (outreachTextarea) {
+        outreachTextarea.addEventListener('input', () => {
+            const lead = state.activeOutreachLead;
+            if (!lead) return;
+            if (state.activeOutreachChannel === 'email') {
+                lead.email_draft = outreachTextarea.value;
+            } else if (state.activeOutreachChannel === 'whatsapp') {
+                lead.whatsapp_draft = outreachTextarea.value;
+            } else if (state.activeOutreachChannel === 'sms') {
+                lead.sms_draft = outreachTextarea.value;
+            }
+            const found = state.outreachLeads.find(l => l.id == lead.id);
+            if (found) {
+                found[state.activeOutreachChannel + '_draft'] = outreachTextarea.value;
+            }
+        });
+    }
+
+    function selectOutreachChannel(channel) {
+        state.activeOutreachChannel = channel;
+        Object.values(outreachChannelBtns).forEach(btn => {
+            if (btn) btn.classList.remove('active');
+        });
+        if (outreachChannelBtns[channel]) {
+            outreachChannelBtns[channel].classList.add('active');
+        }
+        renderOutreachChannelText();
+    }
+
+    if (outreachChannelBtns.email) outreachChannelBtns.email.addEventListener('click', () => selectOutreachChannel('email'));
+    if (outreachChannelBtns.whatsapp) outreachChannelBtns.whatsapp.addEventListener('click', () => selectOutreachChannel('whatsapp'));
+    if (outreachChannelBtns.sms) outreachChannelBtns.sms.addEventListener('click', () => selectOutreachChannel('sms'));
+
+    // Outreach Generate AI Button
+    if (outreachGenerateBtn) {
+        outreachGenerateBtn.addEventListener('click', async () => {
+            const lead = state.activeOutreachLead;
+            if (!lead) return;
+
+            const provider = outreachLlmSelect ? outreachLlmSelect.value : '';
+            
+            outreachGenerateBtn.disabled = true;
+            const originalText = outreachGenerateBtn.innerHTML;
+            outreachGenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+            try {
+                const res = await fetch('api/generate-outreach.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lead_id: lead.id,
+                        llm_provider: provider
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    lead.email_draft = data.email_draft;
+                    lead.whatsapp_draft = data.whatsapp_draft;
+                    lead.sms_draft = data.sms_draft;
+
+                    // Sync list array
+                    const found = state.outreachLeads.find(l => l.id == lead.id);
+                    if (found) {
+                        found.email_draft = data.email_draft;
+                        found.whatsapp_draft = data.whatsapp_draft;
+                        found.sms_draft = data.sms_draft;
+                    }
+
+                    renderOutreachChannelText();
+                    showToast('AI Outreach drafts generated successfully.');
+                } else {
+                    alert('Error generating outreach: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Failed to generate AI outreach', err);
+                alert('Request failed: ' + err.message);
+            } finally {
+                outreachGenerateBtn.disabled = false;
+                outreachGenerateBtn.innerHTML = originalText;
+            }
+        });
+    }
+
+    // Outreach Save Button
+    if (outreachSaveBtn) {
+        outreachSaveBtn.addEventListener('click', async () => {
+            const lead = state.activeOutreachLead;
+            if (!lead) return;
+
+            outreachSaveBtn.disabled = true;
+            const originalText = outreachSaveBtn.innerHTML;
+            outreachSaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            try {
+                const res = await fetch('api/leads.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'update_drafts',
+                        lead_id: lead.id,
+                        email_draft: lead.email_draft || '',
+                        whatsapp_draft: lead.whatsapp_draft || '',
+                        sms_draft: lead.sms_draft || ''
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Draft outreach saved successfully.');
+                } else {
+                    alert('Error saving draft: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Failed to save outreach drafts', err);
+                alert('Request failed: ' + err.message);
+            } finally {
+                outreachSaveBtn.disabled = false;
+                outreachSaveBtn.innerHTML = originalText;
+            }
+        });
+    }
+
+    // Outreach Copy Button
+    if (outreachCopyBtn) {
+        outreachCopyBtn.addEventListener('click', () => {
+            if (!outreachTextarea) return;
+            const text = outreachTextarea.value;
+            if (!text) {
+                showToast('Nothing to copy.');
+                return;
+            }
+
+            navigator.clipboard.writeText(text)
+                .then(() => showToast('Draft copied to clipboard.'))
+                .catch(err => {
+                    console.error('Failed to copy', err);
+                    outreachTextarea.select();
+                    document.execCommand('copy');
+                    showToast('Draft copied to clipboard.');
+                });
+        });
+    }
+
+    // Outreach Send Button
+    if (outreachSendBtn) {
+        outreachSendBtn.addEventListener('click', async () => {
+            const lead = state.activeOutreachLead;
+            if (!lead) return;
+
+            const type = state.activeOutreachChannel;
+
+            outreachSendBtn.disabled = true;
+            const originalText = outreachSendBtn.innerHTML;
+            outreachSendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+            try {
+                // First save the current draft contents
+                const saveRes = await fetch('api/leads.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'update_drafts',
+                        lead_id: lead.id,
+                        email_draft: lead.email_draft || '',
+                        whatsapp_draft: lead.whatsapp_draft || '',
+                        sms_draft: lead.sms_draft || ''
+                    })
+                });
+                const saveData = await saveRes.json();
+                if (!saveData.success) {
+                    throw new Error(saveData.error || 'Failed to save drafts before sending.');
+                }
+
+                // Call outreach delivery endpoint
+                const sendRes = await fetch('api/outreach.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lead_id: lead.id,
+                        type: type
+                    })
+                });
+                const sendData = await sendRes.json();
+                if (sendData.success) {
+                    showToast(sendData.message || 'Outreach sent successfully.');
+                    
+                    // Mark lead status as OUTREACHED locally
+                    lead.status = 'OUTREACHED';
+                    const found = state.outreachLeads.find(l => l.id == lead.id);
+                    if (found) found.status = 'OUTREACHED';
+                    
+                    // Re-render sidebar lists/badges to show outreached status
+                    renderOutreachLeadsList();
+                    
+                    // Refresh CRM data if they switch back later
+                    loadLeadsCrmData();
+                } else {
+                    alert('Error sending outreach: ' + (sendData.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Failed to send outreach', err);
+                alert('Request failed: ' + err.message);
+            } finally {
+                outreachSendBtn.disabled = false;
+                outreachSendBtn.innerHTML = originalText;
+            }
+        });
+    }
+
+    const tabBtnOutreach = document.getElementById('tab-btn-outreach');
+    if (tabBtnOutreach) {
+        tabBtnOutreach.addEventListener('click', () => switchTab('outreach'));
+    }
+
+    // ----------------------------------------------------
+    // OUTREACH MINI PANEL LOGIC
+    // ----------------------------------------------------
+    const outreachMiniCampaignSelect = document.getElementById('outreach-mini-campaign-select');
+
+    function populateOutreachMiniCampaignSelect() {
+        const select = document.getElementById('outreach-mini-campaign-select');
+        if (!select) return;
+        
+        const prev = select.value;
+        select.innerHTML = '<option value="">— Select Campaign —</option>';
+        state.campaigns.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.title;
+            select.appendChild(opt);
+        });
+
+        if (prev && [...select.options].some(o => o.value === prev)) {
+            select.value = prev;
+        } else if (state.activeCampaignId && [...select.options].some(o => o.value == state.activeCampaignId)) {
+            select.value = state.activeCampaignId;
+        }
+    }
+
+    if (outreachMiniCampaignSelect) {
+        outreachMiniCampaignSelect.addEventListener('change', async () => {
+            const campaignId = outreachMiniCampaignSelect.value;
+            const listContainer = document.getElementById('outreach-mini-contacts-list');
+            const countSpan = document.getElementById('outreach-mini-count');
+            if (!listContainer) return;
+
+            if (!campaignId) {
+                listContainer.innerHTML = '<div style="color:var(--text-muted); font-size:12px; text-align:center; padding:20px;">Select a campaign above to load contacts.</div>';
+                if (countSpan) countSpan.textContent = '0 Leads';
+                return;
+            }
+
+            listContainer.innerHTML = '<div style="color:var(--text-muted); font-size:12px; text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+            try {
+                const res = await fetch(`api/leads.php?campaign_id=${campaignId}`);
+                const data = await res.json();
+                if (data.success) {
+                    const leads = data.leads || [];
+                    if (countSpan) countSpan.textContent = leads.length + ' Leads';
+                    
+                    listContainer.innerHTML = '';
+                    if (leads.length === 0) {
+                        listContainer.innerHTML = '<div style="color:var(--text-muted); font-size:12px; text-align:center; padding:20px;">No contacts found in this campaign.</div>';
+                        return;
+                    }
+
+                    leads.forEach(lead => {
+                        const item = document.createElement('div');
+                        item.style.cssText = 'background:var(--bg-primary); border:1px solid var(--border-color); border-radius:var(--border-radius-sm); padding:10px 12px; display:flex; justify-content:space-between; align-items:center; gap:10px; box-shadow:var(--shadow-sm);';
+                        
+                        const scoreClass = `score-${(lead.score || 'MEDIUM').toLowerCase()}`;
+                        let leadStatus = (lead.status || 'GENERATED').toUpperCase();
+                        if (leadStatus === 'GENERATED') leadStatus = 'QUALIFIED';
+
+                        let statusClass = 'created';
+                        if (leadStatus === 'OUTREACHED') statusClass = 'running';
+                        if (leadStatus === 'CLOSED') statusClass = 'completed';
+
+                        item.innerHTML = `
+                            <div style="display:flex; flex-direction:column; gap:2px; flex-grow:1; min-width:0;">
+                                <span style="font-weight:600; font-size:12px; color:var(--text-primary); text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">${escapeHtml(lead.company_name)}</span>
+                                <div style="display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text-secondary);">
+                                    <span style="text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:100px;">${escapeHtml(lead.contact_name)}</span>
+                                    <span class="lead-score-badge ${scoreClass}" style="font-size:8px; padding:1px 4px;">${lead.score || 'MEDIUM'}</span>
+                                    <span class="campaign-badge badge-${statusClass}" style="font-size:8px; padding:1px 4px;">${leadStatus.toLowerCase()}</span>
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:6px; flex-shrink:0;">
+                                <button class="action-icon-button quick-send-email-btn" data-id="${lead.id}" title="Quick Send Email Outreach" style="color:var(--accent-success); width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:1px solid var(--border-color); background:var(--bg-secondary);">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                                <button class="action-icon-button open-workstation-btn" data-id="${lead.id}" title="Open in Outreach Workstation" style="color:var(--accent-primary); width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:1px solid var(--border-color); background:var(--bg-secondary);">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </button>
+                            </div>
+                        `;
+
+                        // Quick Send Email button handler
+                        const quickSendBtn = item.querySelector('.quick-send-email-btn');
+                        if (quickSendBtn) {
+                            quickSendBtn.addEventListener('click', async (e) => {
+                                e.stopPropagation();
+                                
+                                quickSendBtn.disabled = true;
+                                const origHtml = quickSendBtn.innerHTML;
+                                quickSendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                                try {
+                                    if (!lead.email_draft) {
+                                        showToast('Generating AI outreach drafts first...');
+                                        const genRes = await fetch('api/generate-outreach.php', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ lead_id: lead.id })
+                                        });
+                                        const genData = await genRes.json();
+                                        if (genData.success) {
+                                            lead.email_draft = genData.email_draft;
+                                            lead.whatsapp_draft = genData.whatsapp_draft;
+                                            lead.sms_draft = genData.sms_draft;
+                                        } else {
+                                            throw new Error(genData.error || 'Failed to generate drafts.');
+                                        }
+                                    }
+
+                                    const saveRes = await fetch('api/leads.php', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            action: 'update_drafts',
+                                            lead_id: lead.id,
+                                            email_draft: lead.email_draft || '',
+                                            whatsapp_draft: lead.whatsapp_draft || '',
+                                            sms_draft: lead.sms_draft || ''
+                                        })
+                                    });
+                                    const saveData = await saveRes.json();
+                                    if (!saveData.success) {
+                                        throw new Error(saveData.error || 'Failed to save drafts.');
+                                    }
+
+                                    const sendRes = await fetch('api/outreach.php', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            lead_id: lead.id,
+                                            type: 'email'
+                                        })
+                                    });
+                                    const sendData = await sendRes.json();
+                                    if (sendData.success) {
+                                        showToast(sendData.message || 'Outreach email sent successfully.');
+                                        lead.status = 'OUTREACHED';
+                                        
+                                        outreachMiniCampaignSelect.dispatchEvent(new Event('change'));
+                                        
+                                        if (state.activeOutreachLead && state.activeOutreachLead.id == lead.id) {
+                                            state.activeOutreachLead.status = 'OUTREACHED';
+                                        }
+                                        const found = state.outreachLeads.find(l => l.id == lead.id);
+                                        if (found) found.status = 'OUTREACHED';
+                                        
+                                        loadLeadsCrmData();
+                                    } else {
+                                        alert('Error sending: ' + (sendData.error || 'Unknown error'));
+                                    }
+                                } catch (err) {
+                                    console.error('Quick send failed', err);
+                                    alert('Quick send failed: ' + err.message);
+                                } finally {
+                                    quickSendBtn.disabled = false;
+                                    quickSendBtn.innerHTML = origHtml;
+                                }
+                            });
+                        }
+
+                        // Open in Workstation handler
+                        const openWorkstationBtn = item.querySelector('.open-workstation-btn');
+                        if (openWorkstationBtn) {
+                            openWorkstationBtn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                
+                                const outreachCampSelect = document.getElementById('outreach-campaign-select');
+                                if (outreachCampSelect) {
+                                    outreachCampSelect.value = campaignId;
+                                }
+                                state.activeCampaignId = parseInt(campaignId);
+                                state.activeOutreachLead = lead;
+                                
+                                switchTab('outreach');
+                            });
+                        }
+
+                        listContainer.appendChild(item);
+                    });
+                } else {
+                    showToast('Failed to load contacts.');
+                }
+            } catch (err) {
+                console.error('Error loading contacts for mini panel', err);
+                showToast('Error loading contacts.');
+            }
+        });
+    }
+
     // Export visibility function globally for toggle config uses
     window.updateChatSectionVisibility = updateChatSectionVisibility;
+
+    // Plugins Panel Helpers
+    function loadPluginsList() {
+        const container = document.getElementById('plugins-list-container');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div style="text-align:center; padding:20px; color:var(--text-muted);">
+                <i class="fas fa-spinner fa-spin"></i> Loading plugins...
+            </div>
+        `;
+
+        fetch('api/plugins.php')
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) {
+                    container.innerHTML = `
+                        <div style="text-align:center; padding:20px; color:var(--accent-error);">
+                            <i class="fas fa-exclamation-triangle"></i> ${escapeHtml(data.error || 'Failed to load plugins')}
+                        </div>
+                    `;
+                    return;
+                }
+
+                const plugins = data.plugins || [];
+                if (plugins.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align:center; padding:20px; color:var(--text-muted);">
+                            No plugins found in the <code>plugins/</code> directory.
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+                plugins.forEach(p => {
+                    const statusClass = p.active ? 'active-badge' : 'inactive-badge';
+                    const statusLabel = p.active ? 'Active' : 'Inactive';
+                    const btnLabel = p.active ? 'Deactivate' : 'Activate';
+                    const btnClass = p.active ? 'btn-deactivate' : 'btn-activate';
+                    
+                    const statusStyle = p.active 
+                        ? 'background: hsla(142, 70%, 45%, 0.15); color: #2ecc71; border: 1px solid hsla(142, 70%, 45%, 0.25);'
+                        : 'background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border-color);';
+                    
+                    const btnStyle = p.active
+                        ? 'background: var(--accent-error); border-color: var(--accent-error);'
+                        : 'background: var(--accent-primary); border-color: var(--accent-primary);';
+
+                    html += `
+                        <div class="plugin-card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-primary); border:1px solid var(--border-color); border-radius:8px; padding:16px;">
+                            <div style="flex-grow:1; padding-right:16px;">
+                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                                    <h4 style="margin:0; font-size:14px; color:var(--text-primary); font-weight:600;">${escapeHtml(p.name)}</h4>
+                                    <span style="font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold; ${statusStyle}">${statusLabel}</span>
+                                </div>
+                                <p style="margin:0 0 4px 0; font-size:11px; color:var(--text-secondary);">${escapeHtml(p.description)}</p>
+                                <div style="font-size:10px; color:var(--text-muted); display:flex; gap:12px;">
+                                    <span>Version: ${escapeHtml(p.version)}</span>
+                                    <span>Author: ${escapeHtml(p.author)}</span>
+                                </div>
+                            </div>
+                            <div>
+                                <button type="button" class="btn-primary toggle-plugin-btn ${btnClass}" data-plugin="${escapeHtml(p.id)}" data-action="${p.active ? 'deactivate' : 'activate'}" style="padding:6px 12px; font-size:11px; margin-top:0; ${btnStyle}">
+                                    ${btnLabel}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+
+                // Wire up click handlers
+                container.querySelectorAll('.toggle-plugin-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const pluginId = btn.dataset.plugin;
+                        const action = btn.dataset.action;
+                        togglePlugin(pluginId, action, btn);
+                    });
+                });
+            })
+            .catch(err => {
+                container.innerHTML = `
+                    <div style="text-align:center; padding:20px; color:var(--accent-error);">
+                        <i class="fas fa-exclamation-triangle"></i> Failed to connect to server.
+                    </div>
+                `;
+            });
+    }
+
+    function togglePlugin(pluginId, action, button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+        fetch('api/plugins.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plugin: pluginId, action: action })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message || 'Operation successful.');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1200);
+            } else {
+                showToast(data.error || 'Failed to toggle plugin.', true);
+                button.disabled = false;
+                button.innerHTML = action === 'activate' ? 'Activate' : 'Deactivate';
+            }
+        })
+        .catch(err => {
+            showToast('Network error while toggling plugin.', true);
+            button.disabled = false;
+            button.innerHTML = action === 'activate' ? 'Activate' : 'Deactivate';
+        });
+    }
 
 });
 

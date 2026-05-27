@@ -13,7 +13,7 @@ class Setting extends BaseModel {
     }
 
     public function saveSettings(array $settings): void {
-        $stmt = $this->pdo->prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
+        $stmt = $this->pdo->prepare("INSERT OR REPLACE INTO settings (`key`, value) VALUES (?, ?)");
         foreach ($settings as $key => $val) {
             $stmt->execute([$key, $val]);
         }
@@ -21,12 +21,12 @@ class Setting extends BaseModel {
 
     public function initializeSchema(): void {
         $this->pdo->exec("CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
+            `key` TEXT PRIMARY KEY,
             value TEXT
         )");
 
         $defaults = [
-            'app_name' => 'Antigravity Marketing',
+            'app_name' => 'Marketing AI Agent',
             'llm_provider' => 'gemini',
             'gemini_api_key' => '',
             'gemini_model' => 'gemini-1.5-flash',
@@ -43,7 +43,7 @@ class Setting extends BaseModel {
             'smtp_user' => '',
             'smtp_pass' => '',
             'smtp_from_email' => 'outreach@example.com',
-            'smtp_from_name' => 'Antigravity Outreach',
+            'smtp_from_name' => 'Mock Outreach',
             'whatsapp_token' => 'mock',
             'whatsapp_phone_id' => '',
             'sms_provider' => 'mock',
@@ -55,13 +55,14 @@ class Setting extends BaseModel {
             'sms_custom_headers' => '',
             'sms_custom_body' => '{"to":"{to}", "message":"{message}"}',
             'enable_public_chat' => '1',
+            'enable_public_notifications' => '1',
             'gemini_active' => '1',
             'lm_studio_active' => '1',
             'ollama_active' => '1'
         ];
 
         foreach ($defaults as $key => $val) {
-            $stmt = $this->pdo->prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
+            $stmt = $this->pdo->prepare("INSERT OR IGNORE INTO settings (`key`, value) VALUES (?, ?)");
             $stmt->execute([$key, $val]);
         }
     }

@@ -1,0 +1,6 @@
+{
+  "name": "Slack Notifier",
+  "version": "1.0.0",
+  "description": "Logs lead qualifications as simulated Slack notifications and adds Slack Webhook configuration to settings.",
+  "author": "Mark Dev"
+}

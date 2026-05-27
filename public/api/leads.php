@@ -74,6 +74,7 @@ try {
             $emailDraft = trim($input['email_draft'] ?? '');
             $whatsappDraft = trim($input['whatsapp_draft'] ?? '');
             $smsDraft = trim($input['sms_draft'] ?? '');
+            $postalAddress = trim($input['postal_address'] ?? '');
 
             $leadId = $db->saveLead(
                 $campaignId,
@@ -90,7 +91,8 @@ try {
                 (int)$user['id'],
                 $source,
                 $mobile,
-                $smsDraft
+                $smsDraft,
+                $postalAddress
             );
 
             // Log activity
@@ -117,18 +119,25 @@ try {
                 exit;
             }
 
+            $campaign = null;
             if ($lead['campaign_id'] !== null) {
-                $campaign = $db->getCampaign((int)$lead['campaign_id'], (int)$user['id'], $user['role']);
-                if (!$campaign) {
-                    http_response_code(403);
-                    echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to this lead campaign.']);
-                    exit;
-                }
-            } else {
-                if ($user['role'] !== 'admin' && (int)$lead['user_id'] !== (int)$user['id']) {
-                    http_response_code(403);
-                    echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to this lead.']);
-                    exit;
+                $campaign = $db->getCampaign((int)$lead['campaign_id'], null, 'admin');
+            }
+
+            // Normal users cannot modify lead metadata on campaign/assigned leads unless they own the campaign.
+            if ($user['role'] !== 'admin') {
+                if ($lead['campaign_id'] !== null) {
+                    if (!$campaign || (int)$campaign['user_id'] !== (int)$user['id']) {
+                        http_response_code(403);
+                        echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to modify lead data of this campaign.']);
+                        exit;
+                    }
+                } else {
+                    if ((int)$lead['user_id'] !== (int)$user['id']) {
+                        http_response_code(403);
+                        echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to modify this lead.']);
+                        exit;
+                    }
                 }
             }
 
@@ -163,6 +172,7 @@ try {
             $emailDraft = trim($input['email_draft'] ?? '');
             $whatsappDraft = trim($input['whatsapp_draft'] ?? '');
             $smsDraft = trim($input['sms_draft'] ?? '');
+            $postalAddress = trim($input['postal_address'] ?? '');
 
             // Admin can reassign lead owner; non-admin users cannot change ownership
             $newOwnerId = null;
@@ -186,7 +196,8 @@ try {
                 $source,
                 $mobile,
                 $newOwnerId,
-                $smsDraft
+                $smsDraft,
+                $postalAddress
             );
 
             // Log activity
@@ -216,19 +227,19 @@ try {
                 echo json_encode(['success' => false, 'error' => 'Lead not found.']);
                 exit;
             }
+
+            $campaign = null;
             if ($lead['campaign_id'] !== null) {
-                $campaign = $db->getCampaign((int)$lead['campaign_id'], (int)$user['id'], $user['role']);
-                if (!$campaign) {
-                    http_response_code(403);
-                    echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to this lead campaign.']);
-                    exit;
-                }
-            } else {
-                if ($user['role'] !== 'admin' && (int)$lead['user_id'] !== (int)$user['id']) {
-                    http_response_code(403);
-                    echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to this lead.']);
-                    exit;
-                }
+                $campaign = $db->getCampaign((int)$lead['campaign_id'], null, 'admin');
+            }
+
+            // Lead owners (assignee or campaign owner) can update drafts.
+            $isLeadOwner = (int)$lead['user_id'] === (int)$user['id'] || ($campaign && (int)$campaign['user_id'] === (int)$user['id']);
+
+            if ($user['role'] !== 'admin' && !$isLeadOwner) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to update drafts for this lead.']);
+                exit;
             }
 
             $db->updateLeadDrafts((int)$leadId, $emailDraft, $whatsappDraft, $smsDraft);
@@ -252,19 +263,19 @@ try {
             echo json_encode(['success' => false, 'error' => 'Lead not found.']);
             exit;
         }
+
+        $campaign = null;
         if ($lead['campaign_id'] !== null) {
-            $campaign = $db->getCampaign((int)$lead['campaign_id'], (int)$user['id'], $user['role']);
-            if (!$campaign) {
-                http_response_code(403);
-                echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to this lead campaign.']);
-                exit;
-            }
-        } else {
-            if ($user['role'] !== 'admin' && (int)$lead['user_id'] !== (int)$user['id']) {
-                http_response_code(403);
-                echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to this lead.']);
-                exit;
-            }
+            $campaign = $db->getCampaign((int)$lead['campaign_id'], null, 'admin');
+        }
+
+        // Lead owners (assignee or campaign owner) can update status.
+        $isLeadOwner = (int)$lead['user_id'] === (int)$user['id'] || ($campaign && (int)$campaign['user_id'] === (int)$user['id']);
+
+        if ($user['role'] !== 'admin' && !$isLeadOwner) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to update status for this lead.']);
+            exit;
         }
 
         $db->updateLeadStatus((int)$leadId, strtoupper($status));
@@ -284,18 +295,26 @@ try {
             echo json_encode(['success' => false, 'error' => 'Lead not found.']);
             exit;
         }
+
+        $campaign = null;
         if ($lead['campaign_id'] !== null) {
-            $campaign = $db->getCampaign((int)$lead['campaign_id'], (int)$user['id'], $user['role']);
-            if (!$campaign) {
-                http_response_code(403);
-                echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to this lead campaign.']);
-                exit;
-            }
-        } else {
-            if ($user['role'] !== 'admin' && (int)$lead['user_id'] !== (int)$user['id']) {
-                http_response_code(403);
-                echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to this lead.']);
-                exit;
+            $campaign = $db->getCampaign((int)$lead['campaign_id'], null, 'admin');
+        }
+
+        // Normal users cannot delete lead data of campaign unless they own the campaign.
+        if ($user['role'] !== 'admin') {
+            if ($lead['campaign_id'] !== null) {
+                if (!$campaign || (int)$campaign['user_id'] !== (int)$user['id']) {
+                    http_response_code(403);
+                    echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to delete lead data of this campaign.']);
+                    exit;
+                }
+            } else {
+                if ((int)$lead['user_id'] !== (int)$user['id']) {
+                    http_response_code(403);
+                    echo json_encode(['success' => false, 'error' => 'Forbidden. Access denied to delete this lead.']);
+                    exit;
+                }
             }
         }
 

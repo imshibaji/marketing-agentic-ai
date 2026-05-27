@@ -1,5 +1,12 @@
 <?php
+// Check if installation lock exists. If not, redirect to installer.
+if (!file_exists(__DIR__ . '/../database/install.lock')) {
+    header('Location: install.php');
+    exit;
+}
+
 require_once __DIR__ . '/../autoload.php';
+$db = new \MarketingAgent\Service\DatabaseService();
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
@@ -25,6 +32,15 @@ require_once __DIR__ . '/../autoload.php';
     <link rel="stylesheet" href="style.css">
     <!-- FontAwesome for Premium Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Load Active Plugins CSS -->
+    <?php
+    $plugins = \MarketingAgent\Plugin\PluginManager::getInstalledPlugins();
+    foreach ($plugins as $plugin) {
+        if ($plugin['active'] && $plugin['has_css']) {
+            echo '    <link rel="stylesheet" href="plugins/' . htmlspecialchars($plugin['id']) . '/' . htmlspecialchars($plugin['id']) . '.css">' . "\n";
+        }
+    }
+    ?>
     <style>
         /* ==========================================
            AUTH OVERLAY — Login / Registration Screen
@@ -415,10 +431,13 @@ require_once __DIR__ . '/../autoload.php';
                         <i class="fas fa-bullhorn"></i> Campaigns
                     </button>
                     <button class="tab-button" id="tab-btn-leads">
-                        <i class="fas fa-users-rectangle"></i> Lead CRM
+                        <i class="fas fa-search-dollar"></i> Leads Generator
                     </button>
                     <button class="tab-button" id="tab-btn-contacts">
                         <i class="fas fa-address-book"></i> Contacts
+                    </button>
+                    <button class="tab-button" id="tab-btn-outreach">
+                        <i class="fas fa-paper-plane"></i> Outreach
                     </button>
                     <button class="tab-button hidden" id="tab-btn-users">
                         <i class="fas fa-user-shield"></i> Users
@@ -533,37 +552,30 @@ require_once __DIR__ . '/../autoload.php';
                         </div>
                     </div>
 
-                    <!-- Split Section: Notifications & Public Chat -->
-                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:20px; margin-bottom:24px;">
+                    <!-- Split Section: Outreach Mini Panel, Public Chat & Notifications -->
+                    <div style="display:flex; flex-wrap:wrap; gap:20px; margin-bottom:24px; justify-content:flex-start; align-items:stretch; width:100%;">
                         
-                        <!-- Notifications Pane -->
-                        <div class="panel-section card-box" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); min-height:450px; max-height:600px;">
+                        <!-- Outreach Mini Panel -->
+                        <div class="panel-section card-box" id="dashboard-outreach-pane" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); height:500px; flex: 1 1 calc(20% - 8px); min-width:240px;">
                             <h3 style="margin:0; font-size:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:10px;">
-                                <span><i class="fas fa-bell" style="color:var(--accent-secondary); margin-right:6px;"></i> System Notifications</span>
-                                <button class="action-icon-button" id="refresh-notifications-btn" title="Refresh Notifications" style="width:28px; height:28px; font-size:12px;">
-                                    <i class="fas fa-sync-alt"></i>
-                                </button>
+                                <span><i class="fas fa-paper-plane" style="color:var(--accent-primary); margin-right:6px;"></i> Outreach Quick Actions</span>
+                                <span id="outreach-mini-count" style="font-size:11px; padding:2px 8px; background:var(--bg-primary); border:1px solid var(--border-color); border-radius:12px; font-weight:600;">0 Leads</span>
                             </h3>
                             
-                            <!-- Admin Notification Publisher Form -->
-                            <div id="admin-notification-publisher" style="display:none; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:4px;">
-                                <h4 style="margin:0 0 10px; font-size:13px; color:var(--text-primary);">Publish New Notification</h4>
-                                <form id="publish-notification-form" style="display:flex; flex-direction:column; gap:8px;">
-                                    <input type="text" id="notification-title" placeholder="Notification Title" required style="width:100%; padding:8px 12px; font-size:12px; border-radius:var(--border-radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
-                                    <textarea id="notification-message" placeholder="Message content... Mention users using @username (sends email)" required style="width:100%; height:60px; padding:8px 12px; font-size:12px; border-radius:var(--border-radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); resize:none;"></textarea>
-                                    <button type="submit" class="btn-primary" style="margin-top:0; padding:8px 12px; font-size:12px; width:fit-content; align-self:flex-end;">
-                                        <i class="fas fa-paper-plane"></i> Publish
-                                    </button>
-                                </form>
+                            <div class="form-group" style="margin-bottom:0; display:flex; flex-direction:column; gap:6px;">
+                                <label for="outreach-mini-campaign-select" style="font-size:11px; font-weight:600; color:var(--text-secondary);">Select Campaign</label>
+                                <select id="outreach-mini-campaign-select" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-color); padding:8px 10px; border-radius:6px; font-family:var(--font-body); font-size:12px; color:var(--text-primary); outline:none;">
+                                    <option value="">— Select Campaign —</option>
+                                </select>
                             </div>
 
-                            <div id="notifications-feed-list" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column; gap:12px; padding-right:4px;">
-                                <!-- Dynamic notifications list -->
+                            <div id="outreach-mini-contacts-list" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column; gap:8px; padding-right:4px;">
+                                <div style="color:var(--text-muted); font-size:12px; text-align:center; padding:20px;">Select a campaign above to load contacts.</div>
                             </div>
                         </div>
 
                         <!-- Public Chat Room Pane -->
-                        <div class="panel-section card-box" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); min-height:450px; max-height:600px;">
+                        <div class="panel-section card-box" id="dashboard-chat-pane" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); height:500px; flex: 2 1 calc(40% - 16px); min-width:320px;">
                             <h3 style="margin:0; font-size:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:10px;">
                                 <span><i class="fas fa-comments" style="color:var(--accent-success); margin-right:6px;"></i> Public Chat Room</span>
                                 <button class="action-icon-button" id="refresh-chat-btn" title="Refresh Chat" style="width:28px; height:28px; font-size:12px;">
@@ -589,6 +601,32 @@ require_once __DIR__ . '/../autoload.php';
                                         <i class="fas fa-paper-plane"></i> Send
                                     </button>
                                 </form>
+                            </div>
+                        </div>
+
+                        <!-- Notifications Pane -->
+                        <div class="panel-section card-box" id="dashboard-notifications-pane" style="display:flex; flex-direction:column; gap:16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); padding:20px; box-shadow:var(--shadow-sm); height:500px; flex: 2 1 calc(40% - 16px); min-width:320px;">
+                            <h3 style="margin:0; font-size:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:10px;">
+                                <span><i class="fas fa-bell" style="color:var(--accent-secondary); margin-right:6px;"></i> System Notifications</span>
+                                <button class="action-icon-button" id="refresh-notifications-btn" title="Refresh Notifications" style="width:28px; height:28px; font-size:12px;">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </h3>
+                            
+                            <!-- Admin Notification Publisher Form -->
+                            <div id="admin-notification-publisher" style="display:none; border-bottom:1px solid var(--border-color); padding-bottom:16px; margin-bottom:4px;">
+                                <h4 style="margin:0 0 10px; font-size:13px; color:var(--text-primary);">Publish New Notification</h4>
+                                <form id="publish-notification-form" style="display:flex; flex-direction:column; gap:8px;">
+                                    <input type="text" id="notification-title" placeholder="Notification Title" required style="width:100%; padding:8px 12px; font-size:12px; border-radius:var(--border-radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+                                    <textarea id="notification-message" placeholder="Message content... Mention users using @username (sends email)" required style="width:100%; height:60px; padding:8px 12px; font-size:12px; border-radius:var(--border-radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); resize:none;"></textarea>
+                                    <button type="submit" class="btn-primary" style="margin-top:0; padding:8px 12px; font-size:12px; width:fit-content; align-self:flex-end;">
+                                        <i class="fas fa-paper-plane"></i> Publish
+                                    </button>
+                                </form>
+                            </div>
+
+                            <div id="notifications-feed-list" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column; gap:12px; padding-right:4px;">
+                                <!-- Dynamic notifications list -->
                             </div>
                         </div>
 
@@ -825,24 +863,7 @@ require_once __DIR__ . '/../autoload.php';
                         <!-- Column 1: Contacts List & CRUD (Left) -->
                         <div class="crm-sidebar" style="display:flex; flex-direction:column; gap:16px; border-right:1px solid var(--border-color); padding-right:20px; height:100%; max-height:100%; min-height:0; overflow:hidden;">
                             <div class="crm-board-header" style="display:flex; flex-direction:column; gap:10px; align-items:flex-start; margin-bottom:0; width:100%;">
-                                <h3 id="crm-board-title" style="font-size:18px;">Contacts CRM</h3>
-                                <button class="btn-primary" id="add-manual-lead-btn" style="width: 100%; font-size:12px; padding:8px 12px; height:auto; line-height:1; margin-top:0; background:linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));">
-                                    <i class="fas fa-user-plus"></i> Add Contact Manually
-                                </button>
-                                <div style="display:flex; gap:10px; width:100%;">
-                                    <select id="lead-filter-status" style="flex:1; background:var(--bg-primary); border:1px solid var(--border-color); padding:6px 10px; border-radius:6px; font-family:var(--font-body); font-size:12px; color:var(--text-primary);">
-                                        <option value="ALL">All Statuses</option>
-                                        <option value="QUALIFIED">Qualified</option>
-                                        <option value="OUTREACHED">Outreached</option>
-                                        <option value="CLOSED">Closed Leads</option>
-                                    </select>
-                                    <select id="lead-filter-score" style="flex:1; background:var(--bg-primary); border:1px solid var(--border-color); padding:6px 10px; border-radius:6px; font-family:var(--font-body); font-size:12px; color:var(--text-primary);">
-                                        <option value="ALL">All Scores</option>
-                                        <option value="HIGH">High Fit</option>
-                                        <option value="MEDIUM">Medium Fit</option>
-                                        <option value="LOW">Low Fit</option>
-                                    </select>
-                                </div>
+                                <h3 id="crm-board-title" style="font-size:18px;">Scraped Prospects</h3>
                             </div>
                             
                             <div id="leads-vertical-list" style="display:flex; flex-direction:column; gap:12px; overflow-y:auto; flex-grow:1; padding-right:4px;">
@@ -852,24 +873,22 @@ require_once __DIR__ . '/../autoload.php';
 
                         <!-- Column 2: Leads Scraper Panel (Middle) -->
                         <div class="crm-scraper-column" style="display:flex; flex-direction:column; gap:16px; border-right:1px solid var(--border-color); padding-right:20px; overflow-y:auto; height:100%; max-height:100%;">
-                            <!-- Active Campaign Context -->
-                            <div style="background:var(--bg-card); border:1px solid var(--border-color); padding:16px; border-radius:var(--border-radius-sm); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; gap:6px;">
-                                <label for="crm-campaign-filter" style="font-size:10px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;"><i class="fas fa-filter"></i> Campaign Context</label>
-                                <select id="crm-campaign-filter" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-color); padding:8px 10px; border-radius:6px; font-family:var(--font-body); font-size:12px; color:var(--text-primary); outline:none;">
-                                    <option value="">All Campaigns &amp; Manual Leads</option>
-                                </select>
-                            </div>
-
                             <!-- SDR Scraper Panel -->
                             <div class="sdr-panel" style="background:var(--bg-card); border:1px solid var(--border-color); padding:16px; border-radius:var(--border-radius-sm); display:flex; flex-direction:column; gap:12px; box-shadow:var(--shadow-sm);">
-                                <h4 style="font-size:14px; margin:0; display:flex; align-items:center; gap:6px;"><i class="fas fa-robot" style="color:var(--accent-primary);"></i> SDR Agent Scraper Settings</h4>
+                                <h4 style="font-size:14px; margin:0; display:flex; align-items:center; gap:6px;"><i class="fas fa-search-dollar" style="color:var(--accent-primary);"></i> Leads Scraper Settings</h4>
                                 <div class="form-group" style="margin-bottom:0; display:flex; flex-direction:column; gap:4px;">
                                     <label for="crm-lead-source-type" style="font-size:10px; font-weight:600; color:var(--text-secondary);">Lead Scraping Source</label>
                                     <select id="crm-lead-source-type" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-color); padding:8px 10px; border-radius:6px; font-family:var(--font-body); font-size:12px; color:var(--text-primary); outline:none;">
-                                        <option value="default">Use Campaign Defaults</option>
-                                        <option value="website">Custom Website URL</option>
+                                        <option value="maps_search">Google Maps Search</option>
                                         <option value="maps_link">Custom Google Maps URL</option>
-                                        <option value="maps_search">Custom Location &amp; Keywords</option>
+                                        <option value="website">Custom Website URL</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group" style="margin-bottom:0; display:flex; flex-direction:column; gap:4px;">
+                                    <label for="scraper-llm-provider" style="font-size:10px; font-weight:600; color:var(--text-secondary);"><i class="fas fa-brain"></i> Select LLM Model (Only Active Can Be Selected)</label>
+                                    <select id="scraper-llm-provider" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-color); padding:8px 10px; border-radius:6px; font-family:var(--font-body); font-size:12px; color:var(--text-primary); outline:none;">
+                                        <option value="">— Loading active models… —</option>
                                     </select>
                                 </div>
                                 
@@ -878,38 +897,22 @@ require_once __DIR__ . '/../autoload.php';
                                     <label id="crm-source-target-label" style="font-size:10px; font-weight:600; color:var(--text-secondary);">Target Link / URL</label>
                                     <input type="text" id="crm-source-target-input" placeholder="e.g. https://example.com" style="width:100%; font-size:12px; padding:8px 10px; background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); outline:none;">
                                 </div>
-                                <div id="crm-source-search-container" class="hidden" style="display:flex; flex-direction:column; gap:4px;">
+                                <div id="crm-source-search-container" style="display:flex; flex-direction:column; gap:4px;">
                                     <label style="font-size:10px; font-weight:600; color:var(--text-secondary);">Location &amp; Keywords</label>
                                     <div style="display:flex; gap:8px; width:100%;">
                                         <input type="text" id="crm-source-loc-input" placeholder="City, State" style="flex:1; font-size:12px; padding:8px 10px; background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); outline:none;">
                                         <input type="text" id="crm-source-kw-input" placeholder="Keywords" style="flex:1; font-size:12px; padding:8px 10px; background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); outline:none;">
                                     </div>
                                 </div>
-                                <div class="form-group" style="margin-bottom:0; display:flex; flex-direction:column; gap:4px;">
-                                    <label for="crm-outreach-language" style="font-size:10px; font-weight:600; color:var(--text-secondary);">Outreach Language</label>
-                                    <select id="crm-outreach-language" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-color); padding:8px 10px; border-radius:6px; font-family:var(--font-body); font-size:12px; color:var(--text-primary); outline:none;">
-                                        <option value="default">Use Campaign Settings</option>
-                                        <option value="English">English</option>
-                                        <option value="Bengali">Bengali (বাংলা)</option>
-                                        <option value="Hindi">Hindi (हिन्दी)</option>
-                                        <option value="Tamil">Tamil (தமிழ்)</option>
-                                        <option value="Telugu">Telugu (తెలుగు)</option>
-                                        <option value="Marathi">Marathi (मराठी)</option>
-                                        <option value="Kannada">Kannada (ಕನ್ನಡ)</option>
-                                        <option value="Gujarati">Gujarati (ગુજરાતી)</option>
-                                        <option value="Malayalam">Malayalam (മലയാളം)</option>
-                                        <option value="Punjabi">Punjabi (ਪੰਜਾਬੀ)</option>
-                                    </select>
-                                </div>
                                 
                                 <button class="btn-primary" id="crm-generate-leads-btn" style="width: 100%; margin-top:4px; font-size:12px; padding:8px 12px; height:auto; line-height:1;">
-                                    <i class="fas fa-bolt"></i> Run SDR Lead Finder
+                                    <i class="fas fa-bolt"></i> Run Scraper
                                 </button>
                             </div>
 
                             <!-- Real-time SDR Scraper Console Logs -->
                             <div class="crm-console-section" style="display:flex; flex-direction:column; gap:6px; flex-grow:1; min-height:180px;">
-                                <h4 style="font-size:11px; font-weight:600; color:var(--text-secondary); margin:0; display:flex; align-items:center; gap:6px;"><i class="fas fa-terminal"></i> SDR Agent Run Logs</h4>
+                                <h4 style="font-size:11px; font-weight:600; color:var(--text-secondary); margin:0; display:flex; align-items:center; gap:6px;"><i class="fas fa-terminal"></i> Scraper Agent Run Logs</h4>
                                 <div class="console-log" id="crm-console-log" style="flex-grow:1; min-height:160px; font-size:11px; padding:10px; background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-family:monospace; overflow-y:auto;">
                                     <!-- Logs append here -->
                                 </div>
@@ -920,7 +923,7 @@ require_once __DIR__ . '/../autoload.php';
                         <div class="lead-detail-panel" style="border-left:none; padding-left:0; overflow-y:auto; height:100%; max-height:100%;">
                             <div id="lead-detail-empty" class="lead-detail-empty">
                                 <i class="fas fa-address-card" style="font-size:32px;"></i>
-                                <p>Select a qualified prospect card from the list to view contact details, AI qualifying report, and customized outreach.</p>
+                                <p>Select a scraped prospect card from the list to view contact details and save them to contacts.</p>
                             </div>
                             <div id="lead-detail-content" class="hidden">
                                 <!-- Rendered dynamically via JS -->
@@ -1014,6 +1017,13 @@ require_once __DIR__ . '/../autoload.php';
                             <div><strong><i class="fas fa-database"></i> Data Source:</strong> <span id="contact-modal-source">Source</span></div>
                             <div><strong><i class="fas fa-bullhorn"></i> Campaign Context:</strong> <span id="contact-modal-campaign">Campaign</span></div>
                             <div><strong><i class="fas fa-user-circle"></i> Owner:</strong> <span id="contact-modal-owner">Owner</span></div>
+                            <div style="grid-column: span 2;"><strong><i class="fas fa-map-marker-alt"></i> Postal Address:</strong> <span id="contact-modal-postal-address">Postal Address</span></div>
+                        </div>
+
+                        <div id="contact-modal-desc-container" style="display:flex; flex-direction:column; gap:6px;">
+                            <label style="font-weight:600; font-size:13px;">Description / Requirements / Notes:</label>
+                            <div id="contact-modal-description" style="background:var(--bg-primary); padding:12px; border-radius:6px; border:1px solid var(--border-color); font-size:12px; line-height:1.5; max-height:120px; overflow-y:auto;">
+                            </div>
                         </div>
 
                         <div style="display:flex; flex-direction:column; gap:6px;">
@@ -1023,20 +1033,104 @@ require_once __DIR__ . '/../autoload.php';
                             </div>
                         </div>
 
-                        <!-- Outreach Tab Section inside modal -->
-                        <div style="display:flex; flex-direction:column; gap:8px;">
-                            <div class="lead-outreach-tabs" style="margin-bottom:0;">
-                                <button class="outreach-tab-btn active" id="contact-modal-tab-email"><i class="fas fa-envelope"></i> Email Draft</button>
-                                <button class="outreach-tab-btn" id="contact-modal-tab-whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp Draft</button>
-                                <button class="outreach-tab-btn" id="contact-modal-tab-sms"><i class="fas fa-comment-alt"></i> SMS Draft</button>
+                        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+                            <button class="btn-primary" id="contact-modal-close-btn" style="padding:8px 16px; margin-top:0;">Close</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Outreach / Followup Panel -->
+                <div id="tab-outreach" class="workspace-panel hidden" style="overflow:hidden; height:100%; min-height:0; display:flex; flex-direction:column; gap:16px;">
+                    <div class="pipeline-layout" style="display:grid; grid-template-columns: 320px 1fr; gap:20px; height:100%; max-height:100%; min-height:0; overflow:hidden;">
+                        
+                        <!-- Sidebar: Settings & Contacts List -->
+                        <div class="card-box" style="display:flex; flex-direction:column; gap:16px; height:100%; max-height:100%; overflow:hidden; padding:20px;">
+                            <h3 style="margin:0; font-size:16px;"><i class="fas fa-paper-plane" style="color:var(--accent-primary); margin-right:6px;"></i> Outreach Settings</h3>
+                            
+                            <div class="form-group" style="margin-bottom:0; display:flex; flex-direction:column; gap:6px;">
+                                <label for="outreach-campaign-select" style="font-size:11px; font-weight:600; color:var(--text-secondary);">Select Campaign</label>
+                                <select id="outreach-campaign-select" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-color); padding:8px 10px; border-radius:6px; font-family:var(--font-body); font-size:12px; color:var(--text-primary); outline:none;">
+                                    <option value="">— Select Campaign —</option>
+                                </select>
                             </div>
-                            <textarea id="contact-modal-draft" readonly style="width:100%; height:180px; padding:12px; font-family:monospace; font-size:12px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-color); border-radius:6px; outline:none; resize:none; line-height:1.4;"></textarea>
+
+                            <div class="form-group" style="margin-bottom:0; display:flex; flex-direction:column; gap:6px;">
+                                <label for="outreach-llm-select" style="font-size:11px; font-weight:600; color:var(--text-secondary);"><i class="fas fa-brain"></i> Select LLM Model</label>
+                                <select id="outreach-llm-select" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-color); padding:8px 10px; border-radius:6px; font-family:var(--font-body); font-size:12px; color:var(--text-primary); outline:none;">
+                                    <option value="">— Loading models… —</option>
+                                </select>
+                            </div>
+
+                            <hr style="border:0; border-top:1px solid var(--border-color); margin:4px 0;">
+
+                            <div style="display:flex; flex-direction:column; flex-grow:1; min-height:0; overflow:hidden;">
+                                <h4 style="font-size:12px; font-weight:600; color:var(--text-secondary); margin:0 0 10px 0; display:flex; align-items:center; justify-content:space-between;">
+                                    <span>Campaign Contacts</span>
+                                    <span id="outreach-contacts-count" style="background:var(--bg-primary); border:1px solid var(--border-color); padding:2px 6px; border-radius:10px; font-size:10px;">0</span>
+                                </h4>
+                                <div id="outreach-contacts-list" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column; gap:8px; padding-right:4px;">
+                                    <div style="color:var(--text-muted); font-size:12px; text-align:center; padding:20px;">Choose a campaign above to load contacts.</div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
-                            <button class="btn-secondary" id="contact-modal-copy-btn" style="padding:8px 16px;"><i class="fas fa-copy"></i> Copy Draft</button>
-                            <button class="btn-secondary" id="contact-modal-send-btn" style="border-color:var(--accent-success); color:var(--accent-success); padding:8px 16px;"><i class="fas fa-paper-plane"></i> Send Outreach</button>
-                            <button class="btn-primary" id="contact-modal-close-btn" style="padding:8px 16px; margin-top:0;">Close</button>
+                        <!-- Main Workspace Area -->
+                        <div class="card-box" style="display:flex; flex-direction:column; height:100%; max-height:100%; overflow:hidden; padding:24px; position:relative;">
+                            
+                            <!-- Empty State -->
+                            <div id="outreach-empty-state" style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; text-align:center; gap:12px; color:var(--text-muted);">
+                                <i class="fas fa-envelope-open-text" style="font-size:48px; color:var(--border-color);"></i>
+                                <h4 style="margin:0; font-size:16px; color:var(--text-secondary);">Outreach Workstation</h4>
+                                <p style="margin:0; font-size:13px; max-width:400px; line-height:1.5;">Select a campaign and a contact card from the sidebar list to generate and manage outreach emails, WhatsApp messages, or SMS drafts.</p>
+                            </div>
+
+                            <!-- Workspace Content (hidden by default) -->
+                            <div id="outreach-workspace-content" class="hidden" style="display:flex; flex-direction:column; height:100%; max-height:100%; overflow:hidden; gap:16px;">
+                                <!-- Contact Details Card -->
+                                <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:8px; padding:16px; font-size:12px; display:flex; flex-direction:column; gap:8px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                                        <div>
+                                            <h4 id="outreach-contact-company" style="font-size:18px; margin:0 0 4px 0; font-family:var(--font-heading);">Company Name</h4>
+                                            <span id="outreach-contact-score" class="lead-score-badge">HIGH FIT</span>
+                                        </div>
+                                    </div>
+                                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:4px;">
+                                        <div><strong><i class="fas fa-user-tie"></i> Contact:</strong> <span id="outreach-contact-name">Name</span></div>
+                                        <div><strong><i class="fas fa-briefcase"></i> Industry:</strong> <span id="outreach-contact-industry">Industry</span></div>
+                                        <div><strong><i class="fas fa-envelope"></i> Email:</strong> <span id="outreach-contact-email">Email</span></div>
+                                        <div><strong><i class="fab fa-whatsapp"></i> WhatsApp:</strong> <span id="outreach-contact-whatsapp">WhatsApp</span></div>
+                                        <div><strong><i class="fas fa-phone"></i> Mobile:</strong> <span id="outreach-contact-mobile">Mobile</span></div>
+                                        <div><strong><i class="fas fa-database"></i> Source:</strong> <span id="outreach-contact-source">Source</span></div>
+                                        <div style="grid-column: span 3;"><strong><i class="fas fa-map-marker-alt"></i> Address:</strong> <span id="outreach-contact-address">Address</span></div>
+                                    </div>
+                                    
+                                    <div id="outreach-contact-desc-container" style="border-top:1px solid var(--border-color); padding-top:8px; margin-top:4px; display:none;">
+                                        <strong>Description / Requirements:</strong>
+                                        <div id="outreach-contact-desc" style="color:var(--text-secondary); line-height:1.4; margin-top:2px;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Channels Navigation & Draft Edit Pane -->
+                                <div style="display:flex; flex-direction:column; flex-grow:1; min-height:0; overflow:hidden; gap:10px;">
+                                    <div class="lead-outreach-tabs" style="margin-bottom:0;">
+                                        <button class="outreach-tab-btn active" id="outreach-pane-tab-email"><i class="fas fa-envelope"></i> Email Draft</button>
+                                        <button class="outreach-tab-btn" id="outreach-pane-tab-whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp Draft</button>
+                                        <button class="outreach-tab-btn" id="outreach-pane-tab-sms"><i class="fas fa-comment-alt"></i> SMS Draft</button>
+                                    </div>
+
+                                    <textarea id="outreach-pane-textarea" style="width:100%; flex-grow:1; min-height:150px; padding:16px; font-family:monospace; font-size:13px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-color); border-radius:6px; outline:none; resize:none; line-height:1.5;"></textarea>
+                                </div>
+
+                                <!-- Actions Row -->
+                                <div style="display:flex; gap:12px; align-items:center;">
+                                    <button class="btn-secondary" id="outreach-generate-btn" style="background:var(--bg-primary);"><i class="fas fa-bolt"></i> Generate Outreach (AI)</button>
+                                    <button class="btn-secondary" id="outreach-save-btn"><i class="fas fa-save"></i> Save Draft</button>
+                                    <button class="btn-secondary" id="outreach-copy-btn"><i class="fas fa-copy"></i> Copy Draft</button>
+                                    
+                                    <button class="btn-primary" id="outreach-send-btn" style="margin-left:auto; margin-top:0; border-color:var(--accent-success); background:linear-gradient(135deg, var(--accent-success), var(--accent-secondary));"><i class="fas fa-paper-plane"></i> Send Outreach</button>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -1130,6 +1224,8 @@ require_once __DIR__ . '/../autoload.php';
                 <button class="settings-tab" data-panel="smtp-panel"><i class="fas fa-envelope"></i> Email SMTP</button>
                 <button class="settings-tab" data-panel="whatsapp-panel"><i class="fab fa-whatsapp"></i> WhatsApp</button>
                 <button class="settings-tab" data-panel="sms-panel"><i class="fas fa-sms"></i> SMS</button>
+                <button class="settings-tab" data-panel="backup-panel"><i class="fas fa-database"></i> Backup, Reset & Demo</button>
+                <button class="settings-tab" data-panel="plugins-panel"><i class="fas fa-plug"></i> Plugins</button>
             </div>
 
             <form id="settings-form">
@@ -1237,6 +1333,13 @@ require_once __DIR__ . '/../autoload.php';
                             <span style="font-weight:600;">Enable Public Chat Section</span>
                         </label>
                         <small style="color:var(--text-muted); font-size:11px; display:block; margin-top:4px;">Turn off this setting to disable the public chat board for all users and admins.</small>
+                    </div>
+                    <div class="form-group" style="margin-top:16px;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                            <input type="checkbox" id="enable_public_notifications" name="enable_public_notifications" value="1">
+                            <span style="font-weight:600;">Enable System Notifications Section</span>
+                        </label>
+                        <small style="color:var(--text-muted); font-size:11px; display:block; margin-top:4px;">Turn off this setting to disable the notifications feed section for all users.</small>
                     </div>
                 </div>
 
@@ -1348,6 +1451,88 @@ require_once __DIR__ . '/../autoload.php';
                     <p style="font-size:11px; color:var(--text-muted); margin-top:8px;">
                         Provide the Twilio credentials or Custom SMS Gateway configurations to enable real-time SMS delivery.
                     </p>
+                </div>
+
+                <!-- Backup Panel -->
+                <div class="settings-panel" id="backup-panel">
+                    <p style="font-size:12px; color:var(--text-secondary); margin-bottom:16px;">
+                        Manage your application database backups. You can download a backup of the current database or upload a previously downloaded backup file to restore it.
+                    </p>
+
+                    <!-- Sub-tabs for Backup, Restore, and Reset & Demo -->
+                    <div style="display:flex; border-bottom:1px solid var(--border-color); margin-bottom:20px; gap:8px;">
+                        <button type="button" class="backup-sub-tab active" data-subpanel="subpanel-backup" style="background:none; border:none; border-bottom:2px solid var(--accent-primary); color:var(--text-primary); padding:8px 16px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; outline:none; transition: all 0.2s ease;">
+                            <i class="fas fa-download"></i> Backup
+                        </button>
+                        <button type="button" class="backup-sub-tab" data-subpanel="subpanel-restore" style="background:none; border:none; border-bottom:2px solid transparent; color:var(--text-secondary); padding:8px 16px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; outline:none; transition: all 0.2s ease;">
+                            <i class="fas fa-upload"></i> Restore
+                        </button>
+                        <button type="button" class="backup-sub-tab" data-subpanel="subpanel-reset-demo" style="background:none; border:none; border-bottom:2px solid transparent; color:var(--text-secondary); padding:8px 16px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; outline:none; transition: all 0.2s ease;">
+                            <i class="fas fa-tools"></i> Reset & Demo
+                        </button>
+                    </div>
+                    
+                    <div class="backup-subpanel-content" id="subpanel-backup" style="display:block;">
+                        <!-- Backup Section -->
+                        <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; padding:16px;">
+                            <h4 style="margin:0 0 8px; font-size:14px; color:var(--text-primary);"><i class="fas fa-download" style="color:var(--accent-primary); margin-right:6px;"></i> Backup Database</h4>
+                            <p style="font-size:11px; color:var(--text-muted); margin:0 0 16px;">
+                                Download a full copy of the current SQLite database (includes all users, campaigns, leads, logs, and settings).
+                            </p>
+                            <button type="button" class="btn-primary" id="btn-download-backup" style="margin-top:0; padding:8px 16px; font-size:12px; display:inline-flex; align-items:center; gap:8px;">
+                                <i class="fas fa-file-download"></i> Download Backup File
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="backup-subpanel-content" id="subpanel-restore" style="display:none;">
+                        <!-- Restore Section -->
+                        <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; padding:16px;">
+                            <h4 style="margin:0 0 8px; font-size:14px; color:var(--text-primary);"><i class="fas fa-upload" style="color:var(--accent-error); margin-right:6px;"></i> Restore Database</h4>
+                            <p style="font-size:11px; color:var(--text-muted); margin:0 0 16px;">
+                                Upload a valid database backup file (`.sqlite` or `.db`) to overwrite the current database. 
+                                <strong style="color:var(--accent-error);">Warning: This will permanently overwrite all current data!</strong>
+                            </p>
+                            <div style="display:flex; flex-direction:column; gap:12px;">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <input type="file" id="restore-db-file" accept=".sqlite,.db" style="font-size:12px; color:var(--text-primary);">
+                                </div>
+                                <button type="button" class="btn-primary" id="btn-restore-backup" style="margin-top:4px; padding:8px 16px; font-size:12px; background:var(--accent-error); border-color:var(--accent-error); width:fit-content; display:inline-flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-file-upload"></i> Restore Backup
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="backup-subpanel-content" id="subpanel-reset-demo" style="display:none;">
+                        <!-- Reset & Demo Section -->
+                        <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; padding:16px;">
+                            <h4 style="margin:0 0 8px; font-size:14px; color:var(--text-primary);"><i class="fas fa-tools" style="color:var(--accent-warning); margin-right:6px;"></i> Reset & Demo Options</h4>
+                            <p style="font-size:11px; color:var(--text-muted); margin:0 0 16px;">
+                                Populate the application with sample campaigns, leads, notifications, and chats for testing, or execute a factory reset of the system database.
+                            </p>
+                            <div style="display:flex; gap:12px;">
+                                <button type="button" class="btn-primary" id="btn-load-demo" style="margin-top:0; padding:8px 16px; font-size:12px; background:var(--accent-secondary); border-color:var(--accent-secondary); display:inline-flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-magic"></i> Load Demo Data
+                                </button>
+                                <button type="button" class="btn-primary" id="btn-reset-app" style="margin-top:0; padding:8px 16px; font-size:12px; background:var(--accent-error); border-color:var(--accent-error); display:inline-flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-trash-alt"></i> Reset Application
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plugins Panel -->
+                <div class="settings-panel" id="plugins-panel">
+                    <p style="font-size:12px; color:var(--text-secondary); margin-bottom:16px;">
+                        <i class="fas fa-info-circle"></i> Enable or disable application plugins. Active plugins reload automatically to register hooks.
+                    </p>
+                    <div id="plugins-list-container" style="display:flex; flex-direction:column; gap:12px;">
+                        <div style="text-align:center; padding:20px; color:var(--text-muted);">
+                            <i class="fas fa-spinner fa-spin"></i> Loading plugins...
+                        </div>
+                    </div>
                 </div>
 
                 <button type="submit" class="btn-primary" id="settings-save-btn" style="width: 100%; margin-top: 20px;">
@@ -1622,6 +1807,11 @@ require_once __DIR__ . '/../autoload.php';
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label for="manual-lead-postal-address"><i class="fas fa-map-marker-alt"></i> Postal Address</label>
+                    <input type="text" id="manual-lead-postal-address" placeholder="e.g. 123 Main St, Kolkata, WB 700001">
+                </div>
+
                 <div id="manual-lead-owner-group" class="form-group" style="display:none;">
                     <label for="manual-lead-owner"><i class="fas fa-user-shield"></i> Contact Owner (Admin)</label>
                     <select id="manual-lead-owner">
@@ -1654,20 +1844,7 @@ require_once __DIR__ . '/../autoload.php';
                     <input type="text" id="manual-lead-reasoning" value="Manually added" placeholder="Reasoning for fit score">
                 </div>
 
-                <div class="form-group">
-                    <label for="manual-lead-email-draft"><i class="fas fa-envelope-open-text"></i> Email Draft Outreach</label>
-                    <textarea id="manual-lead-email-draft" placeholder="Write custom email outreach draft..." style="height:60px; resize:none; padding:8px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); outline:none; font-family:var(--font-body); font-size:12px;"></textarea>
-                </div>
 
-                <div class="form-group">
-                    <label for="manual-lead-whatsapp-draft"><i class="fab fa-whatsapp-square"></i> WhatsApp Draft Outreach</label>
-                    <textarea id="manual-lead-whatsapp-draft" placeholder="Write custom WhatsApp outreach draft..." style="height:60px; resize:none; padding:8px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); outline:none; font-family:var(--font-body); font-size:12px;"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="manual-lead-sms-draft"><i class="fas fa-comment-dots"></i> SMS Draft Outreach</label>
-                    <textarea id="manual-lead-sms-draft" placeholder="Write custom SMS outreach draft..." style="height:60px; resize:none; padding:8px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); outline:none; font-family:var(--font-body); font-size:12px;"></textarea>
-                </div>
 
                 <div id="manual-lead-error" style="color:var(--accent-error); font-size:13px; display:none;"></div>
 
@@ -1682,6 +1859,55 @@ require_once __DIR__ . '/../autoload.php';
             </form>
         </div>
     </div>
+
+    <!-- Global JS Hook Manager for Frontend Plugins -->
+    <script>
+    window.AppHooks = {
+        actions: {},
+        filters: {},
+        addAction: function(hook, callback, priority = 10) {
+            if (!this.actions[hook]) this.actions[hook] = [];
+            this.actions[hook].push({ callback, priority });
+            this.actions[hook].sort((a, b) => a.priority - b.priority);
+        },
+        addFilter: function(hook, callback, priority = 10) {
+            if (!this.filters[hook]) this.filters[hook] = [];
+            this.filters[hook].push({ callback, priority });
+            this.filters[hook].sort((a, b) => a.priority - b.priority);
+        },
+        doAction: function(hook, ...args) {
+            if (!this.actions[hook]) return;
+            this.actions[hook].forEach(item => {
+                try {
+                    item.callback(...args);
+                } catch (e) {
+                    console.error("Error in action hook '" + hook + "':", e);
+                }
+            });
+        },
+        applyFilters: function(hook, value, ...args) {
+            if (!this.filters[hook]) return value;
+            let val = value;
+            this.filters[hook].forEach(item => {
+                try {
+                    val = item.callback(val, ...args);
+                } catch (e) {
+                    console.error("Error in filter hook '" + hook + "':", e);
+                }
+            });
+            return val;
+        }
+    };
+    </script>
+
+    <!-- Load Active Plugins JS -->
+    <?php
+    foreach ($plugins as $plugin) {
+        if ($plugin['active'] && $plugin['has_js']) {
+            echo '    <script src="plugins/' . htmlspecialchars($plugin['id']) . '/' . htmlspecialchars($plugin['id']) . '.js"></script>' . "\n";
+        }
+    }
+    ?>
 
     <script src="app.js"></script>
 

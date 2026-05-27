@@ -16,7 +16,7 @@ use MarketingAgent\Service\AuthService;
 try {
     $db = new DatabaseService();
     $settings = $db->getSettings();
-    $appName = $settings['app_name'] ?? 'Antigravity Marketing';
+    $appName = $settings['app_name'] ?? 'Marketing AI Agent';
 
     $user = AuthService::getCurrentUser();
 

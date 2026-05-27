@@ -66,8 +66,10 @@ In each company's description, include a simulated local street address and a mo
 For each company, you must generate:
 - Company Name
 - Contact Name (a realistic decision maker, e.g., Owner, VP of Marketing, CTO, Head of Sales)
+- Postal Address (realistic full physical address including street, city, state, zip/postal code)
 - Contact Email (realistic, matching the company domain)
-- WhatsApp Number (realistic mobile phone format, e.g., +1-555-019-XXXX or +91-98765-XXXXX)
+- Mobile Number (realistic mobile phone format, e.g., +1-555-019-XXXX or +91-98765-XXXXX)
+- WhatsApp Number (realistic WhatsApp format, e.g., +1-555-019-XXXX or +91-98765-XXXXX)
 - Industry
 - Short Company Description (what they do, why they might need the product, and any specific source context details)
 
@@ -77,7 +79,9 @@ Format:
   {
     \"company_name\": \"...\",
     \"contact_name\": \"...\",
+    \"postal_address\": \"...\",
     \"email\": \"...\",
+    \"mobile\": \"...\",
     \"whatsapp\": \"...\",
     \"industry\": \"...\",
     \"description\": \"...\"
@@ -124,7 +128,9 @@ Format:
                 [
                     'company_name' => 'DevFlow Solutions',
                     'contact_name' => 'Sarah Connor',
+                    'postal_address' => '100 Engineering Blvd, Austin, TX 78701',
                     'email' => 'sarah.connor@devflow.io',
+                    'mobile' => '+1-555-014-' . $num1,
                     'whatsapp' => '+1-555-014-' . $num1,
                     'industry' => 'Software & SaaS',
                     'description' => 'A mid-sized provider of workflow automation tools for engineering teams looking to streamline deployment pipelines.'
@@ -132,7 +138,9 @@ Format:
                 [
                     'company_name' => 'CloudScale Inc',
                     'contact_name' => 'David Miller',
+                    'postal_address' => '500 Cloud Way, Suite 300, Seattle, WA 98101',
                     'email' => 'd.miller@cloudscale.net',
+                    'mobile' => '+1-555-019-' . $num2,
                     'whatsapp' => '+1-555-019-' . $num2,
                     'industry' => 'Cloud Infrastructure',
                     'description' => 'Enterprise cloud hosting startup scaling rapidly and needing better user onboarding and developer advocacy.'
@@ -140,7 +148,9 @@ Format:
                 [
                     'company_name' => 'PixelPerfect Agency',
                     'contact_name' => 'Elena Rostova',
+                    'postal_address' => '24 Design Plaza, London, EC1A 1BB, UK',
                     'email' => 'elena@pixelperfect.design',
+                    'mobile' => '+44-7700-900' . $num1,
                     'whatsapp' => '+44-7700-900' . $num1,
                     'industry' => 'Digital Design Agency',
                     'description' => 'A boutique design agency that builds custom web apps for clients, looking for tool integrations to speed up development.'
@@ -148,7 +158,9 @@ Format:
                 [
                     'company_name' => 'StackBound Corp',
                     'contact_name' => 'Marcus Aurelius',
+                    'postal_address' => '800 Security Rd, Boston, MA 02110',
                     'email' => 'marcus@stackbound.com',
+                    'mobile' => '+1-555-012-' . $num2,
                     'whatsapp' => '+1-555-012-' . $num2,
                     'industry' => 'Cybersecurity',
                     'description' => 'A fast-growing security compliance software company seeking automated marketing solutions to reach developer managers.'
@@ -156,7 +168,9 @@ Format:
                 [
                     'company_name' => 'NodeCraft Systems',
                     'contact_name' => 'Kenji Tanaka',
+                    'postal_address' => '1-2-3 Shibuya, Tokyo, 150-0002, Japan',
                     'email' => 'tanaka@nodecraft.io',
+                    'mobile' => '+81-90-5555-' . $num1,
                     'whatsapp' => '+81-90-5555-' . $num1,
                     'industry' => 'EdTech & Training',
                     'description' => 'Online learning platform offering coding bootcamps to career switchers, wanting to target tech organizations.'
@@ -169,7 +183,9 @@ Format:
             [
                 'company_name' => 'Apex Global Marketing',
                 'contact_name' => 'Jessica Alba',
+                'postal_address' => '456 Broadway, New York, NY 10013',
                 'email' => 'j.alba@apexglobal.com',
+                'mobile' => '+1-555-015-' . $num1,
                 'whatsapp' => '+1-555-015-' . $num1,
                 'industry' => 'Marketing & Advertising',
                 'description' => 'Full-service advertising agency managing multiple client campaigns looking to automate content generation.'
@@ -177,7 +193,9 @@ Format:
             [
                 'company_name' => 'Nova Retail Brands',
                 'contact_name' => 'Thomas Wright',
+                'postal_address' => '789 Commerce St, Los Angeles, CA 90014',
                 'email' => 't.wright@novabrands.co',
+                'mobile' => '+1-555-011-' . $num2,
                 'whatsapp' => '+1-555-011-' . $num2,
                 'industry' => 'E-commerce & Retail',
                 'description' => 'Direct-to-consumer lifestyle brand expanding their online presence and seeking better social media engagement.'
@@ -185,7 +203,9 @@ Format:
             [
                 'company_name' => 'Vanguard Logistics',
                 'contact_name' => 'Robert Chen',
+                'postal_address' => '12 Marina Blvd, Singapore 018982',
                 'email' => 'robert.chen@vanguardlog.com',
+                'mobile' => '+65-9123-' . $num1,
                 'whatsapp' => '+65-9123-' . $num1,
                 'industry' => 'Transportation & Logistics',
                 'description' => 'Global supply chain manager looking to digitize customer notifications and sales follow-ups.'
@@ -193,7 +213,9 @@ Format:
             [
                 'company_name' => 'Summit Financial Group',
                 'contact_name' => 'Amanda Ross',
+                'postal_address' => '100 Financial Plaza, Chicago, IL 60603',
                 'email' => 'amanda.ross@summitfin.com',
+                'mobile' => '+1-555-017-' . $num2,
                 'whatsapp' => '+1-555-017-' . $num2,
                 'industry' => 'Financial Services',
                 'description' => 'Wealth management firm wanting to generate personalized newsletters for high-net-worth clients.'
@@ -201,7 +223,9 @@ Format:
             [
                 'company_name' => 'GreenSprout Foods',
                 'contact_name' => 'Oliver Green',
+                'postal_address' => '32 Organic Way, Portland, OR 97201',
                 'email' => 'oliver@greensprout.organic',
+                'mobile' => '+1-555-018-' . $num1,
                 'whatsapp' => '+1-555-018-' . $num1,
                 'industry' => 'Food & Beverage',
                 'description' => 'Organic snack subscription service looking to expand corporate B2B sales through direct outreach.'

@@ -62,10 +62,13 @@ try {
             'sms_custom_headers',
             'sms_custom_body',
             'enable_public_chat',
+            'enable_public_notifications',
             'gemini_active',
             'lm_studio_active',
-            'ollama_active'
         ];
+
+        // Let plugins whitelist their own settings keys
+        $allowedKeys = \MarketingAgent\Plugin\HookManager::applyFilters('admin_settings_allowed_keys', $allowedKeys);
 
         $settingsToSave = [];
         foreach ($allowedKeys as $key) {
@@ -85,17 +88,21 @@ try {
 
         if (!$user || $user['role'] !== 'admin') {
             // Return only public safe settings
-            echo json_encode(['success' => true, 'settings' => [
+            $publicSettings = [
                 'app_name' => $settings['app_name'] ?? 'Marketing AI Agent',
                 'enable_public_chat' => $settings['enable_public_chat'] ?? '1',
+                'enable_public_notifications' => $settings['enable_public_notifications'] ?? '1',
                 'gemini_active' => $settings['gemini_active'] ?? '1',
                 'lm_studio_active' => $settings['lm_studio_active'] ?? '1',
                 'ollama_active' => $settings['ollama_active'] ?? '1'
-            ]]);
+            ];
+            $publicSettings = \MarketingAgent\Plugin\HookManager::applyFilters('public_settings', $publicSettings, $settings);
+            echo json_encode(['success' => true, 'settings' => $publicSettings]);
             exit;
         }
 
         // Admin: return full settings with masked secrets
+        $settings = \MarketingAgent\Plugin\HookManager::applyFilters('admin_get_settings', $settings);
         if (!empty($settings['gemini_api_key'])) {
             $key = $settings['gemini_api_key'];
             $settings['gemini_api_key_masked'] = substr($key, 0, 4) . '...' . substr($key, -4);

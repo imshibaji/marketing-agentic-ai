@@ -17,27 +17,28 @@ class Lead extends BaseModel {
         ?int $userId = null,
         string $source = 'agent',
         ?string $mobile = null,
-        ?string $smsDraft = null
+        ?string $smsDraft = null,
+        ?string $postalAddress = null
     ): int {
         $stmt = $this->pdo->prepare("INSERT INTO leads 
-            (campaign_id, company_name, contact_name, email, whatsapp, mobile, industry, description, score, reasoning, email_draft, whatsapp_draft, sms_draft, user_id, source) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            (campaign_id, company_name, contact_name, email, whatsapp, mobile, industry, description, score, reasoning, email_draft, whatsapp_draft, sms_draft, user_id, source, postal_address) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
-            $campaignId, $companyName, $contactName, $email, $whatsapp, $mobile, $industry, $description, $score, $reasoning, $emailDraft, $whatsappDraft, $smsDraft, $userId, $source
+            $campaignId, $companyName, $contactName, $email, $whatsapp, $mobile, $industry, $description, $score, $reasoning, $emailDraft, $whatsappDraft, $smsDraft, $userId, $source, $postalAddress
         ]);
         return (int)$this->pdo->lastInsertId();
     }
 
     public function getLeads(?int $campaignId = null, ?int $userId = null, string $role = 'user'): array {
         if ($campaignId !== null) {
-            $stmt = $this->pdo->prepare("SELECT l.*, c.title as campaign_title, u.username as owner_username FROM leads l LEFT JOIN campaigns c ON l.campaign_id = c.id LEFT JOIN users u ON COALESCE(l.user_id, c.user_id) = u.id WHERE l.campaign_id = ? ORDER BY l.id DESC");
+            $stmt = $this->pdo->prepare("SELECT l.*, c.title as campaign_title, c.user_id as campaign_owner_id, u.username as owner_username FROM leads l LEFT JOIN campaigns c ON l.campaign_id = c.id LEFT JOIN users u ON COALESCE(l.user_id, c.user_id) = u.id WHERE l.campaign_id = ? ORDER BY l.id DESC");
             $stmt->execute([$campaignId]);
             return $stmt->fetchAll();
         }
 
         if ($role === 'admin') {
             $stmt = $this->pdo->query("
-                SELECT l.*, c.title as campaign_title, u.username as owner_username 
+                SELECT l.*, c.title as campaign_title, c.user_id as campaign_owner_id, u.username as owner_username 
                 FROM leads l 
                 LEFT JOIN campaigns c ON l.campaign_id = c.id 
                 LEFT JOIN users u ON COALESCE(l.user_id, c.user_id) = u.id
@@ -48,7 +49,7 @@ class Lead extends BaseModel {
 
         // Return leads owned by the user, from their campaigns, or from campaigns shared with them
         $stmt = $this->pdo->prepare("
-            SELECT l.*, c.title as campaign_title, u.username as owner_username 
+            SELECT l.*, c.title as campaign_title, c.user_id as campaign_owner_id, u.username as owner_username 
             FROM leads l 
             LEFT JOIN campaigns c ON l.campaign_id = c.id 
             LEFT JOIN users u ON COALESCE(l.user_id, c.user_id) = u.id
@@ -84,7 +85,8 @@ class Lead extends BaseModel {
         string $source = 'manual',
         ?string $mobile = null,
         ?int $userId = null,
-        ?string $smsDraft = null
+        ?string $smsDraft = null,
+        ?string $postalAddress = null
     ): void {
         if ($userId !== null) {
             $stmt = $this->pdo->prepare("UPDATE leads SET 
@@ -102,12 +104,13 @@ class Lead extends BaseModel {
                 sms_draft = ?,
                 source = ?,
                 mobile = ?,
-                user_id = ?
+                user_id = ?,
+                postal_address = ?
                 WHERE id = ?");
             $stmt->execute([
                 $campaignId, $companyName, $contactName, $email, $whatsapp,
                 $industry, $description, $score, $reasoning, $emailDraft,
-                $whatsappDraft, $smsDraft, $source, $mobile, $userId, $id
+                $whatsappDraft, $smsDraft, $source, $mobile, $userId, $postalAddress, $id
             ]);
         } else {
             $stmt = $this->pdo->prepare("UPDATE leads SET 
@@ -124,12 +127,13 @@ class Lead extends BaseModel {
                 whatsapp_draft = ?,
                 sms_draft = ?,
                 source = ?,
-                mobile = ?
+                mobile = ?,
+                postal_address = ?
                 WHERE id = ?");
             $stmt->execute([
                 $campaignId, $companyName, $contactName, $email, $whatsapp,
                 $industry, $description, $score, $reasoning, $emailDraft,
-                $whatsappDraft, $smsDraft, $source, $mobile, $id
+                $whatsappDraft, $smsDraft, $source, $mobile, $postalAddress, $id
             ]);
         }
     }
@@ -173,6 +177,7 @@ class Lead extends BaseModel {
             status TEXT DEFAULT 'GENERATED', -- GENERATED, QUALIFIED, OUTREACHED, CLOSED
             user_id INTEGER,
             source TEXT DEFAULT 'agent',
+            postal_address TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
         )");
@@ -188,6 +193,9 @@ class Lead extends BaseModel {
         } catch (\PDOException $e) {}
         try {
             $this->pdo->exec("ALTER TABLE leads ADD COLUMN sms_draft TEXT");
+        } catch (\PDOException $e) {}
+        try {
+            $this->pdo->exec("ALTER TABLE leads ADD COLUMN postal_address TEXT");
         } catch (\PDOException $e) {}
     }
 }

@@ -53,6 +53,9 @@ class DatabaseService {
         $this->notificationModel = new Notification($this->pdo);
         $this->publicChatModel = new PublicChat($this->pdo);
 
+        // Load active plugins before schema initialization
+        \MarketingAgent\Plugin\PluginManager::initialize($this);
+
         $this->initializeSchema();
     }
 
@@ -148,9 +151,9 @@ class DatabaseService {
             }
 
             if ($username === null) {
-                $this->pdo = new PDO($dsn);
+                $this->pdo = new \MarketingAgent\Database\SafePdo($dsn);
             } else {
-                $this->pdo = new PDO($dsn, $username, $password);
+                $this->pdo = new \MarketingAgent\Database\SafePdo($dsn, $username, $password);
             }
 
             $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -172,6 +175,9 @@ class DatabaseService {
         $this->settingModel->initializeSchema();
         $this->notificationModel->initializeSchema();
         $this->publicChatModel->initializeSchema();
+
+        // Let active plugins initialize custom schemas
+        \MarketingAgent\Plugin\HookManager::doAction('db_initialize_schema', $this);
     }
 
     public function getPdo(): PDO {
@@ -312,12 +318,13 @@ class DatabaseService {
         ?int $userId = null,
         string $source = 'agent',
         ?string $mobile = null,
-        ?string $smsDraft = null
+        ?string $smsDraft = null,
+        ?string $postalAddress = null
     ): int {
         return $this->leadModel->saveLead(
             $campaignId, $companyName, $contactName, $email, $whatsapp,
             $industry, $description, $score, $reasoning, $emailDraft,
-            $whatsappDraft, $userId, $source, $mobile, $smsDraft
+            $whatsappDraft, $userId, $source, $mobile, $smsDraft, $postalAddress
         );
     }
 
@@ -345,12 +352,13 @@ class DatabaseService {
         string $source = 'manual',
         ?string $mobile = null,
         ?int $userId = null,
-        ?string $smsDraft = null
+        ?string $smsDraft = null,
+        ?string $postalAddress = null
     ): void {
         $this->leadModel->updateLead(
             $id, $campaignId, $companyName, $contactName, $email, $whatsapp,
             $industry, $description, $score, $reasoning, $emailDraft,
-            $whatsappDraft, $source, $mobile, $userId, $smsDraft
+            $whatsappDraft, $source, $mobile, $userId, $smsDraft, $postalAddress
         );
     }
 

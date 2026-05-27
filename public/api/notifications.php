@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -22,6 +22,34 @@ try {
     if (!$currentUser) {
         http_response_code(401);
         echo json_encode(['success' => false, 'error' => 'Unauthorized. Please login.']);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+        if ($currentUser['role'] !== 'admin') {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Forbidden. Only administrators can delete notifications.']);
+            exit;
+        }
+
+        $id = $_GET['id'] ?? null;
+        if (!$id) {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $id = $input['id'] ?? null;
+        }
+
+        if (!$id) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Missing notification ID.']);
+            exit;
+        }
+
+        $stmt = $pdo->prepare("DELETE FROM notifications WHERE id = ?");
+        $stmt->execute([$id]);
+
+        $db->logActivity($currentUser['id'], 'DELETED_NOTIFICATION', "Deleted notification ID {$id}");
+
+        echo json_encode(['success' => true, 'message' => 'Notification deleted successfully.']);
         exit;
     }
 
