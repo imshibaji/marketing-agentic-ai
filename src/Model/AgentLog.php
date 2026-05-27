@@ -2,6 +2,7 @@
 namespace MarketingAgent\Model;
 
 class AgentLog extends BaseModel {
+    protected static string $tableName = 'agent_logs';
     public function logAgentAction(int $campaignId, string $agentName, string $action, string $logText): void {
         $stmt = $this->pdo->prepare("INSERT INTO agent_logs (campaign_id, agent_name, action, log_text) VALUES (?, ?, ?, ?)");
         $stmt->execute([$campaignId, $agentName, $action, $logText]);
@@ -14,14 +15,16 @@ class AgentLog extends BaseModel {
     }
 
     public function initializeSchema(): void {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS agent_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        $pk = $this->schema->primaryKeyDdl();
+        $vc = $this->schema->varcharDdl(255);
+        $dt = $this->schema->datetimeDdl(true);
+        $this->schema->createTableIfNotExists('agent_logs', "
+            id {$pk},
             campaign_id INTEGER,
-            agent_name TEXT NOT NULL,
-            action TEXT NOT NULL,
+            agent_name {$vc} NOT NULL,
+            action {$vc} NOT NULL,
             log_text TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
-        )");
+            created_at {$dt}
+        ");
     }
 }

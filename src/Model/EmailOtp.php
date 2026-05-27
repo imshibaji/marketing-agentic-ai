@@ -2,6 +2,7 @@
 namespace MarketingAgent\Model;
 
 class EmailOtp extends BaseModel {
+    protected static string $tableName = 'email_otps';
     public function createOtp(string $email, string $otp, string $expiresAt): void {
         $stmt = $this->pdo->prepare("UPDATE email_otps SET used = 1 WHERE email = ?");
         $stmt->execute([$email]);
@@ -25,13 +26,17 @@ class EmailOtp extends BaseModel {
     }
 
     public function initializeSchema(): void {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS email_otps (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL,
-            otp TEXT NOT NULL,
-            expires_at DATETIME NOT NULL,
+        $pk = $this->schema->primaryKeyDdl();
+        $vc = $this->schema->varcharDdl(255);
+        $dtNoDefault = $this->schema->datetimeDdl(false);
+        $dt = $this->schema->datetimeDdl(true);
+        $this->schema->createTableIfNotExists('email_otps', "
+            id {$pk},
+            email {$vc} NOT NULL,
+            otp {$vc} NOT NULL,
+            expires_at {$dtNoDefault} NOT NULL,
             used INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )");
+            created_at {$dt}
+        ");
     }
 }

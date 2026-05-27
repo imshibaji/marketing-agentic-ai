@@ -2,6 +2,7 @@
 namespace MarketingAgent\Model;
 
 class Lead extends BaseModel {
+    protected static string $tableName = 'leads';
     public function saveLead(
         ?int $campaignId,
         string $companyName,
@@ -159,43 +160,36 @@ class Lead extends BaseModel {
     }
 
     public function initializeSchema(): void {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS leads (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        $pk = $this->schema->primaryKeyDdl();
+        $vc = $this->schema->varcharDdl(255);
+        $dt = $this->schema->datetimeDdl(true);
+
+        $this->schema->createTableIfNotExists('leads', "
+            id {$pk},
             campaign_id INTEGER,
-            company_name TEXT NOT NULL,
-            contact_name TEXT,
-            email TEXT,
-            whatsapp TEXT,
-            mobile TEXT,
-            industry TEXT,
+            company_name {$vc} NOT NULL,
+            contact_name {$vc},
+            email {$vc},
+            whatsapp {$vc},
+            mobile {$vc},
+            industry {$vc},
             description TEXT,
-            score TEXT, -- HIGH, MEDIUM, LOW
+            score {$vc},
             reasoning TEXT,
             email_draft TEXT,
             whatsapp_draft TEXT,
             sms_draft TEXT,
-            status TEXT DEFAULT 'GENERATED', -- GENERATED, QUALIFIED, OUTREACHED, CLOSED
+            status {$vc} DEFAULT 'GENERATED',
             user_id INTEGER,
-            source TEXT DEFAULT 'agent',
+            source {$vc} DEFAULT 'agent',
             postal_address TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
-        )");
+            created_at {$dt}
+        ");
 
-        try {
-            $this->pdo->exec("ALTER TABLE leads ADD COLUMN user_id INTEGER");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE leads ADD COLUMN source TEXT DEFAULT 'agent'");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE leads ADD COLUMN mobile TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE leads ADD COLUMN sms_draft TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE leads ADD COLUMN postal_address TEXT");
-        } catch (\PDOException $e) {}
+        $this->schema->addColumnIfNotExists('leads', 'user_id', 'INTEGER');
+        $this->schema->addColumnIfNotExists('leads', 'source', "{$vc} DEFAULT 'agent'");
+        $this->schema->addColumnIfNotExists('leads', 'mobile', 'TEXT');
+        $this->schema->addColumnIfNotExists('leads', 'sms_draft', 'TEXT');
+        $this->schema->addColumnIfNotExists('leads', 'postal_address', 'TEXT');
     }
 }

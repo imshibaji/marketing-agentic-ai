@@ -2,6 +2,7 @@
 namespace MarketingAgent\Model;
 
 class UserActivityLog extends BaseModel {
+    protected static string $tableName = 'user_activity_logs';
     public function logActivity(?int $userId, string $action, string $details): void {
         $stmt = $this->pdo->prepare("INSERT INTO user_activity_logs (user_id, action, details) VALUES (?, ?, ?)");
         $stmt->execute([$userId, $action, $details]);
@@ -18,13 +19,15 @@ class UserActivityLog extends BaseModel {
     }
 
     public function initializeSchema(): void {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS user_activity_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        $pk = $this->schema->primaryKeyDdl();
+        $vc = $this->schema->varcharDdl(255);
+        $dt = $this->schema->datetimeDdl(true);
+        $this->schema->createTableIfNotExists('user_activity_logs', "
+            id {$pk},
             user_id INTEGER,
-            action TEXT NOT NULL,
+            action {$vc} NOT NULL,
             details TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-        )");
+            created_at {$dt}
+        ");
     }
 }

@@ -2,6 +2,7 @@
 namespace MarketingAgent\Model;
 
 class Campaign extends BaseModel {
+    protected static string $tableName = 'campaigns';
     public function createCampaign(string $title, string $description, string $audience, string $channel, string $crawlType = 'none', string $crawlTarget = '', string $language = 'English', ?int $userId = null): int {
         $stmt = $this->pdo->prepare("INSERT INTO campaigns (title, product_description, target_audience, channel, crawl_type, crawl_target, language, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'CREATED', ?)");
         $stmt->execute([$title, $description, $audience, $channel, $crawlType, $crawlTarget, $language, $userId]);
@@ -60,13 +61,10 @@ class Campaign extends BaseModel {
     }
 
     public function shareCampaign(int $campaignId, array $userIds): void {
-        // Remove all existing shares for this campaign
-        $stmt = $this->pdo->prepare("DELETE FROM campaign_shares WHERE campaign_id = ?");
-        $stmt->execute([$campaignId]);
-        // Insert new shares
-        $stmt = $this->pdo->prepare("INSERT OR IGNORE INTO campaign_shares (campaign_id, user_id) VALUES (?, ?)");
+        $this->pdo->prepare("DELETE FROM " . $this->schema->quoteTable('campaign_shares') . " WHERE " . $this->schema->quoteColumn('campaign_id') . " = ?")->execute([$campaignId]);
         foreach ($userIds as $uid) {
-            $stmt->execute([$campaignId, (int)$uid]);
+            (new \MarketingAgent\Database\QueryBuilder($this->pdo, 'campaign_shares'))
+                ->insertIgnore(['campaign_id' => $campaignId, 'user_id' => (int)$uid], ['campaign_id', 'user_id']);
         }
     }
 
@@ -87,45 +85,37 @@ class Campaign extends BaseModel {
     }
 
     public function initializeSchema(): void {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS campaigns (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
+        $pk = $this->schema->primaryKeyDdl();
+        $vc = $this->schema->varcharDdl(255);
+        $dt = $this->schema->datetimeDdl(true);
+
+        $this->schema->createTableIfNotExists('campaigns', "
+            id {$pk},
+            title {$vc} NOT NULL,
             product_description TEXT NOT NULL,
-            target_audience TEXT NOT NULL,
-            channel TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'CREATED', -- CREATED, RUNNING, COMPLETED, FAILED
+            target_audience {$vc} NOT NULL,
+            channel {$vc} NOT NULL,
+            status {$vc} NOT NULL DEFAULT 'CREATED',
             final_content TEXT,
-            crawl_type TEXT DEFAULT 'none',
-            crawl_target TEXT DEFAULT '',
-            language TEXT DEFAULT 'English',
+            crawl_type {$vc} DEFAULT 'none',
+            crawl_target {$vc} DEFAULT '',
+            language {$vc} DEFAULT 'English',
             user_id INTEGER,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-        )");
+            llm_provider {$vc} DEFAULT 'gemini',
+            created_at {$dt}
+        ");
 
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS campaign_shares (
+        // campaign_shares junction table
+        $this->schema->createTableIfNotExists('campaign_shares', "
             campaign_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (campaign_id, user_id),
-            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )");
+            user_id INTEGER NOT NULL
+        ");
+        $this->schema->addUniqueIndexIfNotExists('campaign_shares', 'idx_campaign_shares_unique', ['campaign_id', 'user_id']);
 
-        try {
-            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN crawl_type TEXT DEFAULT 'none'");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN crawl_target TEXT DEFAULT ''");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN language TEXT DEFAULT 'English'");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN user_id INTEGER");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE campaigns ADD COLUMN llm_provider TEXT DEFAULT 'gemini'");
-        } catch (\PDOException $e) {}
+        $this->schema->addColumnIfNotExists('campaigns', 'crawl_type', "{$vc} DEFAULT 'none'");
+        $this->schema->addColumnIfNotExists('campaigns', 'crawl_target', "{$vc} DEFAULT ''");
+        $this->schema->addColumnIfNotExists('campaigns', 'language', "{$vc} DEFAULT 'English'");
+        $this->schema->addColumnIfNotExists('campaigns', 'user_id', 'INTEGER');
+        $this->schema->addColumnIfNotExists('campaigns', 'llm_provider', "{$vc} DEFAULT 'gemini'");
     }
 }

@@ -2,6 +2,7 @@
 namespace MarketingAgent\Model;
 
 class Setting extends BaseModel {
+    protected static string $tableName = 'settings';
     public function getSettings(): array {
         $stmt = $this->pdo->query("SELECT * FROM settings");
         $results = $stmt->fetchAll();
@@ -13,17 +14,18 @@ class Setting extends BaseModel {
     }
 
     public function saveSettings(array $settings): void {
-        $stmt = $this->pdo->prepare("INSERT OR REPLACE INTO settings (`key`, value) VALUES (?, ?)");
         foreach ($settings as $key => $val) {
-            $stmt->execute([$key, $val]);
+            $this->schema->upsert('settings', ['key' => $key, 'value' => $val], ['key']);
         }
     }
 
     public function initializeSchema(): void {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS settings (
-            `key` TEXT PRIMARY KEY,
+        $vc = $this->schema->varcharDdl(255);
+        $qkey = $this->schema->quoteColumn('key');
+        $this->schema->createTableIfNotExists('settings', "
+            {$qkey} {$vc} PRIMARY KEY,
             value TEXT
-        )");
+        ");
 
         $defaults = [
             'app_name' => 'Marketing AI Agent',
@@ -61,9 +63,8 @@ class Setting extends BaseModel {
             'ollama_active' => '1'
         ];
 
-        foreach ($defaults as $key => $val) {
-            $stmt = $this->pdo->prepare("INSERT OR IGNORE INTO settings (`key`, value) VALUES (?, ?)");
-            $stmt->execute([$key, $val]);
+        foreach ($defaults as $k => $v) {
+            $this->qb()->reset()->insertIgnore(["key" => $k, "value" => $v], ["key"]);
         }
     }
 }

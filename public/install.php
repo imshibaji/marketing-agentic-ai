@@ -90,7 +90,15 @@ function testDbConnection(string $driver, array $config): void {
         if ($driver === 'mysql') {
             $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4";
         } elseif ($driver === 'pgsql') {
+            $port = $port ?: '5432';
             $dsn = "pgsql:host={$host};port={$port};dbname={$dbname}";
+        } elseif ($driver === 'sqlsrv') {
+            $port = $port ?: '1433';
+            $dsn = "sqlsrv:Server={$host},{$port};Database={$dbname}";
+        } elseif ($driver === 'oracle') {
+            $port = $port ?: '1521';
+            $serviceName = trim($config['service_name'] ?? $dbname);
+            $dsn = "oci:dbname=//{$host}:{$port}/{$serviceName};charset=UTF8";
         } else {
             throw new \Exception("Unsupported database driver: " . $driver);
         }
@@ -126,12 +134,16 @@ function runApplicationInstaller(string $driver, array $input): void {
     if ($driver === 'sqlite') {
         $envContent .= "DB_SQLITE_FILE=" . ($input['sqlite_file'] ?? 'database/database.sqlite') . "\n";
     } else {
+        $defaultPorts = ['mysql' => '3306','pgsql' => '5432','sqlsrv' => '1433','oracle' => '1521'];
         $envContent .= "DB_HOST=" . ($input['host'] ?? '127.0.0.1') . "\n";
-        $envContent .= "DB_PORT=" . ($input['port'] ?? '3306') . "\n";
+        $envContent .= "DB_PORT=" . ($input['port'] ?? ($defaultPorts[$driver] ?? '3306')) . "\n";
         $envContent .= "DB_DATABASE=" . ($input['database'] ?? '') . "\n";
         $envContent .= "DB_USERNAME=" . ($input['username'] ?? '') . "\n";
         $envContent .= "DB_PASSWORD=" . ($input['password'] ?? '') . "\n";
         $envContent .= "DB_CHARSET=utf8mb4\n";
+        if (!empty($input['service_name'])) {
+            $envContent .= "DB_SERVICE_NAME=" . $input['service_name'] . "\n";
+        }
     }
     $envContent .= "\n# Google Gemini API Key\n";
     $envContent .= "GEMINI_API_KEY=" . trim($input['gemini_api_key'] ?? '') . "\n";
@@ -147,12 +159,16 @@ function runApplicationInstaller(string $driver, array $input): void {
     if ($driver === 'sqlite') {
         putenv("DB_SQLITE_FILE=" . ($input['sqlite_file'] ?? 'database/database.sqlite'));
     } else {
+        $defaultPorts = ['mysql' => '3306','pgsql' => '5432','sqlsrv' => '1433','oracle' => '1521'];
         putenv("DB_HOST=" . ($input['host'] ?? '127.0.0.1'));
-        putenv("DB_PORT=" . ($input['port'] ?? '3306'));
+        putenv("DB_PORT=" . ($input['port'] ?? ($defaultPorts[$driver] ?? '3306')));
         putenv("DB_DATABASE=" . ($input['database'] ?? ''));
         putenv("DB_USERNAME=" . ($input['username'] ?? ''));
         putenv("DB_PASSWORD=" . ($input['password'] ?? ''));
         putenv("DB_CHARSET=utf8mb4");
+        if (!empty($input['service_name'])) {
+            putenv("DB_SERVICE_NAME=" . $input['service_name']);
+        }
     }
     putenv("GEMINI_API_KEY=" . trim($input['gemini_api_key'] ?? ''));
 
@@ -253,8 +269,11 @@ function renderAlreadyInstalled() {
 $phpVersion = PHP_VERSION;
 $phpOk = version_compare($phpVersion, '8.0.0', '>=');
 $sqliteOk = extension_loaded('pdo_sqlite');
-$mysqlOk = extension_loaded('pdo_mysql');
-$pdoOk = $sqliteOk || $mysqlOk;
+$mysqlOk  = extension_loaded('pdo_mysql');
+$pgsqlOk  = extension_loaded('pdo_pgsql');
+$sqlsrvOk = extension_loaded('pdo_sqlsrv');
+$ociOk    = extension_loaded('pdo_oci') || extension_loaded('oci8');
+$pdoOk = $sqliteOk || $mysqlOk || $pgsqlOk || $sqlsrvOk || $ociOk;
 $rootWritable = is_writable(__DIR__ . '/../');
 $dbDirWritable = is_writable(__DIR__ . '/../database') || (!file_exists(__DIR__ . '/../database') && is_writable(__DIR__ . '/../'));
 
@@ -592,6 +611,9 @@ $allChecksPassed = $phpOk && $pdoOk && $rootWritable && $dbDirWritable;
                     <select id="driver" name="driver">
                         <?php if ($sqliteOk): ?><option value="sqlite">SQLite (File-based, recommended for simple setups)</option><?php endif; ?>
                         <?php if ($mysqlOk): ?><option value="mysql">MySQL / MariaDB (Server-based)</option><?php endif; ?>
+                        <?php if ($pgsqlOk): ?><option value="pgsql">PostgreSQL</option><?php endif; ?>
+                        <?php if ($sqlsrvOk): ?><option value="sqlsrv">Microsoft SQL Server</option><?php endif; ?>
+                        <?php if ($ociOk): ?><option value="oracle">Oracle Database</option><?php endif; ?>
                     </select>
                 </div>
 
@@ -604,8 +626,8 @@ $allChecksPassed = $phpOk && $pdoOk && $rootWritable && $dbDirWritable;
                     </div>
                 </div>
 
-                <!-- MySQL Settings Group -->
-                <div class="db-group db-mysql" style="display:none;">
+                <!-- Shared Server Settings (MySQL / PostgreSQL / SQL Server / Oracle) -->
+                <div class="db-group db-mysql db-pgsql db-sqlsrv db-oracle" style="display:none;">
                     <div class="form-row">
                         <div class="form-group">
                             <label for="host">Database Host</label>
@@ -619,6 +641,12 @@ $allChecksPassed = $phpOk && $pdoOk && $rootWritable && $dbDirWritable;
                     <div class="form-group">
                         <label for="database">Database Name</label>
                         <input type="text" id="database" name="database" value="marketing_ai">
+                    </div>
+                    <!-- Oracle Service Name (only visible for oracle) -->
+                    <div class="form-group db-oracle-only" style="display:none;">
+                        <label for="service_name">Oracle Service Name</label>
+                        <input type="text" id="service_name" name="service_name" placeholder="ORCL">
+                        <small style="color:#a4b0be; font-size:11px; margin-top:2px;">The Oracle service name or SID. Leave blank to use the Database Name above.</small>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -786,11 +814,23 @@ $allChecksPassed = $phpOk && $pdoOk && $rootWritable && $dbDirWritable;
 
             // Driver switch fields display
             const driverSelect = document.getElementById('driver');
+            const defaultPorts = { mysql: '3306', pgsql: '5432', sqlsrv: '1433', oracle: '1521' };
             driverSelect.addEventListener('change', () => {
                 const driver = driverSelect.value;
+                // Hide all groups first
                 document.querySelectorAll('.db-group').forEach(el => el.style.display = 'none');
-                document.querySelector('.db-' + driver).style.display = 'block';
-                
+                // Show SQLite or shared server group
+                if (driver === 'sqlite') {
+                    document.querySelector('.db-sqlite').style.display = 'block';
+                } else {
+                    document.querySelector('.db-mysql.db-pgsql.db-sqlsrv.db-oracle').style.display = 'block';
+                    // Auto-fill port
+                    const portEl = document.getElementById('port');
+                    if (portEl) portEl.value = defaultPorts[driver] || '3306';
+                    // Show/hide Oracle service name field
+                    const oracleOnly = document.querySelector('.db-oracle-only');
+                    if (oracleOnly) oracleOnly.style.display = driver === 'oracle' ? 'block' : 'none';
+                }
                 // Reset connection status on driver switch
                 connectionVerified = false;
                 document.getElementById('btn-next-2').disabled = true;
@@ -825,6 +865,8 @@ $allChecksPassed = $phpOk && $pdoOk && $rootWritable && $dbDirWritable;
                     payload.database = document.getElementById('database').value;
                     payload.username = document.getElementById('username').value;
                     payload.password = document.getElementById('password').value;
+                    const svcEl = document.getElementById('service_name');
+                    if (svcEl) payload.service_name = svcEl.value;
                 }
 
                 fetch('install.php?action=test_connection', {
@@ -906,6 +948,8 @@ $allChecksPassed = $phpOk && $pdoOk && $rootWritable && $dbDirWritable;
                     payload.database = document.getElementById('database').value;
                     payload.username = document.getElementById('username').value;
                     payload.password = document.getElementById('password').value;
+                    const svcEl = document.getElementById('service_name');
+                    if (svcEl) payload.service_name = svcEl.value;
                 }
 
                 fetch('install.php?action=run_install', {

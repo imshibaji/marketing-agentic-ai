@@ -1477,7 +1477,7 @@ $db = new \MarketingAgent\Service\DatabaseService();
                         <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; padding:16px;">
                             <h4 style="margin:0 0 8px; font-size:14px; color:var(--text-primary);"><i class="fas fa-download" style="color:var(--accent-primary); margin-right:6px;"></i> Backup Database</h4>
                             <p style="font-size:11px; color:var(--text-muted); margin:0 0 16px;">
-                                Download a full copy of the current SQLite database (includes all users, campaigns, leads, logs, and settings).
+                                Download a full backup copy of the current database (includes all users, campaigns, leads, logs, and settings). Downloads as a SQLite file for SQLite databases, or as a JSON file for server-based databases.
                             </p>
                             <button type="button" class="btn-primary" id="btn-download-backup" style="margin-top:0; padding:8px 16px; font-size:12px; display:inline-flex; align-items:center; gap:8px;">
                                 <i class="fas fa-file-download"></i> Download Backup File
@@ -1490,12 +1490,12 @@ $db = new \MarketingAgent\Service\DatabaseService();
                         <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; padding:16px;">
                             <h4 style="margin:0 0 8px; font-size:14px; color:var(--text-primary);"><i class="fas fa-upload" style="color:var(--accent-error); margin-right:6px;"></i> Restore Database</h4>
                             <p style="font-size:11px; color:var(--text-muted); margin:0 0 16px;">
-                                Upload a valid database backup file (`.sqlite` or `.db`) to overwrite the current database. 
+                                Upload a valid database backup file (`.sqlite`, `.db`, or `.json`) to overwrite the current database. 
                                 <strong style="color:var(--accent-error);">Warning: This will permanently overwrite all current data!</strong>
                             </p>
                             <div style="display:flex; flex-direction:column; gap:12px;">
                                 <div style="display:flex; align-items:center; gap:10px;">
-                                    <input type="file" id="restore-db-file" accept=".sqlite,.db" style="font-size:12px; color:var(--text-primary);">
+                                    <input type="file" id="restore-db-file" accept=".sqlite,.db,.json" style="font-size:12px; color:var(--text-primary);">
                                 </div>
                                 <button type="button" class="btn-primary" id="btn-restore-backup" style="margin-top:4px; padding:8px 16px; font-size:12px; background:var(--accent-error); border-color:var(--accent-error); width:fit-content; display:inline-flex; align-items:center; gap:8px;">
                                     <i class="fas fa-file-upload"></i> Restore Backup

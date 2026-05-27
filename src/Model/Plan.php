@@ -4,6 +4,8 @@ namespace MarketingAgent\Model;
 use Exception;
 
 class Plan extends BaseModel {
+    protected static string $tableName = 'plans';
+
     public function getPlans(): array {
         $stmt = $this->pdo->query("SELECT *, (SELECT COUNT(*) FROM users u WHERE u.plan_id = plans.id) AS user_count FROM plans ORDER BY id ASC");
         return $stmt->fetchAll();
@@ -47,42 +49,40 @@ class Plan extends BaseModel {
     }
 
     public function initializeSchema(): void {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS plans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
+        $pk = $this->schema->primaryKeyDdl();
+        $vc = $this->schema->varcharDdl(255);
+        $dt = $this->schema->datetimeDdl(true);
+
+        $this->schema->createTableIfNotExists('plans', "
+            id {$pk},
+            name {$vc} NOT NULL,
             campaign_limit INTEGER NOT NULL DEFAULT 10,
             lead_limit INTEGER NOT NULL DEFAULT 50,
             llm_limit INTEGER NOT NULL DEFAULT 100,
             email_limit INTEGER NOT NULL DEFAULT 100,
             whatsapp_limit INTEGER NOT NULL DEFAULT 100,
             sms_limit INTEGER NOT NULL DEFAULT 100,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )");
+            created_at {$dt}
+        ");
 
-        try {
-            $this->pdo->exec("ALTER TABLE plans ADD COLUMN llm_limit INTEGER NOT NULL DEFAULT 100");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE plans ADD COLUMN email_limit INTEGER NOT NULL DEFAULT 100");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE plans ADD COLUMN whatsapp_limit INTEGER NOT NULL DEFAULT 100");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE plans ADD COLUMN sms_limit INTEGER NOT NULL DEFAULT 100");
-        } catch (\PDOException $e) {}
+        $this->schema->addUniqueIndexIfNotExists('plans', 'idx_plans_name_unique', ['name']);
+        $this->schema->addColumnIfNotExists('plans', 'llm_limit', 'INTEGER NOT NULL DEFAULT 100');
+        $this->schema->addColumnIfNotExists('plans', 'email_limit', 'INTEGER NOT NULL DEFAULT 100');
+        $this->schema->addColumnIfNotExists('plans', 'whatsapp_limit', 'INTEGER NOT NULL DEFAULT 100');
+        $this->schema->addColumnIfNotExists('plans', 'sms_limit', 'INTEGER NOT NULL DEFAULT 100');
 
-        // Insert a default plan if not exists
-        try {
-            $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM plans WHERE name = ?");
-            $stmt->execute(['Default Plan']);
-            if ($stmt->fetchColumn() == 0) {
-                $this->pdo->prepare("INSERT INTO plans (name, campaign_limit, lead_limit, llm_limit, email_limit, whatsapp_limit, sms_limit) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                     ->execute(['Default Plan', 10, 50, 100, 100, 100, 100]);
-                $defaultPlanId = (int)$this->pdo->lastInsertId();
-                // Assign all existing users who have plan_id NULL to this default plan
-                $this->pdo->prepare("UPDATE users SET plan_id = ? WHERE plan_id IS NULL")->execute([$defaultPlanId]);
-            }
-        } catch (\PDOException $e) {}
+        // Seed default plan
+        $qb = $this->qb();
+        if ($qb->where('name', '=', 'Default Plan')->count() === 0) {
+            $this->qb()->reset()->insert([
+                'name' => 'Default Plan',
+                'campaign_limit' => 10,
+                'lead_limit' => 50,
+                'llm_limit' => 100,
+                'email_limit' => 100,
+                'whatsapp_limit' => 100,
+                'sms_limit' => 100
+            ]);
+        }
     }
 }

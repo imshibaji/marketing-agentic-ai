@@ -2,14 +2,17 @@
 namespace MarketingAgent\Model;
 
 class Notification extends BaseModel {
+    protected static string $tableName = 'notifications';
     public function initializeSchema(): void {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS notifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        $pk = $this->schema->primaryKeyDdl();
+        $vc = $this->schema->varcharDdl(255);
+        $dt = $this->schema->datetimeDdl(true);
+        $this->schema->createTableIfNotExists('notifications', "
+            id {$pk},
             sender_id INTEGER,
-            title TEXT NOT NULL,
+            title {$vc} NOT NULL,
             message TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE SET NULL
-        )");
+            created_at {$dt}
+        ");
     }
 }

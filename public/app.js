@@ -2275,7 +2275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnRestoreBackup.addEventListener('click', async () => {
             const file = restoreDbFile.files[0];
             if (!file) {
-                alert('Please select a valid SQLite database backup file first.');
+                alert('Please select a valid database backup file (.sqlite, .db, or .json) first.');
                 return;
             }
 

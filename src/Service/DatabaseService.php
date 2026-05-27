@@ -150,14 +150,24 @@ class DatabaseService {
                     break;
             }
 
+            $options = [
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ];
+
             if ($username === null) {
-                $this->pdo = new \MarketingAgent\Database\SafePdo($dsn);
+                $this->pdo = new PDO($dsn, null, null, $options);
             } else {
-                $this->pdo = new \MarketingAgent\Database\SafePdo($dsn, $username, $password);
+                $this->pdo = new PDO($dsn, $username, $password, $options);
             }
 
-            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+            // Driver-specific post-connect settings
+            if (in_array($this->driver, ['mysql', 'pdo_mysql'])) {
+                $this->pdo->exec("SET NAMES utf8mb4");
+                $this->pdo->exec("SET foreign_key_checks = 0");
+            } elseif (in_array($this->driver, ['pgsql', 'postgresql', 'postgres'])) {
+                $this->pdo->exec("SET client_encoding TO 'UTF8'");
+            }
         } catch (Exception $e) {
             throw new Exception("Database connection failed: " . $e->getMessage());
         }

@@ -65,6 +65,7 @@ try {
             'enable_public_notifications',
             'gemini_active',
             'lm_studio_active',
+            'ollama_active',
         ];
 
         // Let plugins whitelist their own settings keys

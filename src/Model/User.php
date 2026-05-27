@@ -2,6 +2,8 @@
 namespace MarketingAgent\Model;
 
 class User extends BaseModel {
+    protected static string $tableName = 'users';
+
     public function getUsers(): array {
         $stmt = $this->pdo->query(
             "SELECT u.id, u.username, u.role, u.created_at, u.full_name, u.email, u.mobile, u.whatsapp_number, u.plan_id,
@@ -129,46 +131,29 @@ class User extends BaseModel {
     }
 
     public function initializeSchema(): void {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'user', -- admin, user
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )");
+        $pk = $this->schema->primaryKeyDdl();
+        $vc = $this->schema->varcharDdl(255);
+        $dt = $this->schema->datetimeDdl(true);
 
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN full_name TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN email TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN mobile TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN whatsapp_number TEXT");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN plan_campaigns INTEGER DEFAULT 10");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN plan_leads INTEGER DEFAULT 50");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN plan_id INTEGER");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN llm_usage INTEGER NOT NULL DEFAULT 0");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN email_usage INTEGER NOT NULL DEFAULT 0");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN whatsapp_usage INTEGER NOT NULL DEFAULT 0");
-        } catch (\PDOException $e) {}
-        try {
-            $this->pdo->exec("ALTER TABLE users ADD COLUMN sms_usage INTEGER NOT NULL DEFAULT 0");
-        } catch (\PDOException $e) {}
+        $this->schema->createTableIfNotExists('users', "
+            id {$pk},
+            username {$vc} NOT NULL,
+            password_hash {$vc} NOT NULL,
+            role {$vc} NOT NULL DEFAULT 'user',
+            created_at {$dt}
+        ");
+
+        $this->schema->addUniqueIndexIfNotExists('users', 'idx_users_username_unique', ['username']);
+        $this->schema->addColumnIfNotExists('users', 'full_name', 'TEXT');
+        $this->schema->addColumnIfNotExists('users', 'email', 'TEXT');
+        $this->schema->addColumnIfNotExists('users', 'mobile', 'TEXT');
+        $this->schema->addColumnIfNotExists('users', 'whatsapp_number', 'TEXT');
+        $this->schema->addColumnIfNotExists('users', 'plan_campaigns', 'INTEGER DEFAULT 10');
+        $this->schema->addColumnIfNotExists('users', 'plan_leads', 'INTEGER DEFAULT 50');
+        $this->schema->addColumnIfNotExists('users', 'plan_id', 'INTEGER');
+        $this->schema->addColumnIfNotExists('users', 'llm_usage', 'INTEGER NOT NULL DEFAULT 0');
+        $this->schema->addColumnIfNotExists('users', 'email_usage', 'INTEGER NOT NULL DEFAULT 0');
+        $this->schema->addColumnIfNotExists('users', 'whatsapp_usage', 'INTEGER NOT NULL DEFAULT 0');
+        $this->schema->addColumnIfNotExists('users', 'sms_usage', 'INTEGER NOT NULL DEFAULT 0');
     }
 }

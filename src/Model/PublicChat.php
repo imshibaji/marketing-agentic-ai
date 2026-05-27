@@ -2,13 +2,16 @@
 namespace MarketingAgent\Model;
 
 class PublicChat extends BaseModel {
+    protected static string $tableName = 'public_chats';
     public function initializeSchema(): void {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS public_chats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        $pk = $this->schema->primaryKeyDdl();
+        $vc = $this->schema->varcharDdl(255);
+        $dt = $this->schema->datetimeDdl(true);
+        $this->schema->createTableIfNotExists('public_chats', "
+            id {$pk},
             user_id INTEGER NOT NULL,
             message TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )");
+            created_at {$dt}
+        ");
     }
 }
