@@ -1,0 +1,31 @@
+{
+    "name": "marketing-agent/app",
+    "description": "Marketing AI Agent Platform",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.1",
+        "codeigniter4/framework": "^4.7",
+        "guzzlehttp/guzzle": "^7.8",
+        "vlucas/phpdotenv": "^5.6"
+    },
+    "require-dev": {
+        "fakerphp/faker": "^1.23",
+        "mikey179/vfsstream": "^1.6",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "MarketingAgent\\": "app/Libraries/MarketingAgent/"
+        },
+        "exclude-from-classmap": [
+            "**/Database/Migrations/**"
+        ]
+    },
+    "config": {
+        "allow-plugins": {
+            "codeigniter4/composer-installer": true
+        }
+    }
+}

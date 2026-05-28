@@ -236,7 +236,32 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (tab === 'leads') {
             elements.tabBtnLeads.classList.add('active');
             elements.tabLeads.classList.remove('hidden');
-            renderScrapedLeadsList();
+            
+            const filterCampaignSelect = document.getElementById('crm-campaign-filter');
+            if (filterCampaignSelect) {
+                // Populate options
+                filterCampaignSelect.innerHTML = '<option value="">All Campaigns &amp; Manual Leads</option>';
+                filterCampaignSelect.innerHTML += '<option value="unsaved_scraper">Latest Scraper Results (Unsaved)</option>';
+                if (state.campaigns && state.campaigns.length > 0) {
+                    state.campaigns.forEach(c => {
+                        filterCampaignSelect.innerHTML += `<option value="${c.id}">${escapeHtml(c.title)}</option>`;
+                    });
+                }
+                
+                // Select correct value
+                if (state.activeCampaignId) {
+                    filterCampaignSelect.value = state.activeCampaignId;
+                    loadLeadsCrmData();
+                } else if (state.scrapedLeads && state.scrapedLeads.length > 0) {
+                    filterCampaignSelect.value = 'unsaved_scraper';
+                    renderScrapedLeadsList();
+                } else {
+                    filterCampaignSelect.value = '';
+                    loadLeadsCrmData();
+                }
+            } else {
+                renderScrapedLeadsList();
+            }
         } else if (tab === 'contacts') {
             if (tabBtnContacts) tabBtnContacts.classList.add('active');
             if (tabContacts) tabContacts.classList.remove('hidden');
@@ -373,6 +398,10 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.provider-lmstudio').forEach(el => el.classList.remove('hidden'));
         } else if (provider === 'ollama') {
             document.querySelectorAll('.provider-ollama').forEach(el => el.classList.remove('hidden'));
+        } else if (provider === 'openrouter') {
+            document.querySelectorAll('.provider-openrouter').forEach(el => el.classList.remove('hidden'));
+        } else if (provider === 'openai_compatible') {
+            document.querySelectorAll('.provider-openai-compat').forEach(el => el.classList.remove('hidden'));
         }
     }
 
@@ -1206,7 +1235,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     saved: false
                 };
             });
+            state.activeCampaignId = null;
+            state.activeCampaign = null;
             state.activeLead = state.scrapedLeads.length > 0 ? state.scrapedLeads[0] : null;
+            
+            const filterCampaignSelect = document.getElementById('crm-campaign-filter');
+            if (filterCampaignSelect) {
+                filterCampaignSelect.value = 'unsaved_scraper';
+            }
+            
             renderScrapedLeadsList();
         });
 
@@ -3048,17 +3085,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (crmCampaignFilter) {
         crmCampaignFilter.addEventListener('change', () => {
             const selectId = crmCampaignFilter.value;
-            if (selectId) {
+            if (selectId === 'unsaved_scraper') {
+                state.activeCampaignId = null;
+                state.activeCampaign = null;
+                renderScrapedLeadsList();
+            } else if (selectId) {
                 state.activeCampaignId = parseInt(selectId);
                 const campObj = state.campaigns.find(c => c.id == state.activeCampaignId);
                 if (campObj) {
                     state.activeCampaign = campObj;
                 }
+                loadLeadsCrmData();
             } else {
                 state.activeCampaignId = null;
                 state.activeCampaign = null;
+                loadLeadsCrmData();
             }
-            loadLeadsCrmData();
         });
     }
 
@@ -3070,6 +3112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (filterCampaignSelect) {
             // Re-populate campaigns in case it changed
             filterCampaignSelect.innerHTML = '<option value="">All Campaigns &amp; Manual Leads</option>';
+            filterCampaignSelect.innerHTML += '<option value="unsaved_scraper">Latest Scraper Results (Unsaved)</option>';
             state.campaigns.forEach(c => {
                 filterCampaignSelect.innerHTML += `<option value="${c.id}">${escapeHtml(c.title)}</option>`;
             });
@@ -3323,6 +3366,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const ollamaCheckbox = document.getElementById('ollama_active');
         if (ollamaCheckbox) {
             payload['ollama_active'] = ollamaCheckbox.checked ? '1' : '0';
+        }
+        const openRouterCheckbox = document.getElementById('openrouter_active');
+        if (openRouterCheckbox) {
+            payload['openrouter_active'] = openRouterCheckbox.checked ? '1' : '0';
+        }
+        const openAiCompatCheckbox = document.getElementById('openai_compat_active');
+        if (openAiCompatCheckbox) {
+            payload['openai_compat_active'] = openAiCompatCheckbox.checked ? '1' : '0';
         }
 
         try {

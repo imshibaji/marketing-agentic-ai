@@ -1,12 +1,52 @@
-# Marketing AI Agent - User Documentation
+# Antigravity Marketing AI Agent - User Documentation
 
-Welcome to the **Antigravity Marketing AI Agent Suite**! This guide details how to navigate the platform, leverage the AI-driven sales development representative (SDR) pipeline, manage leads, compose personalized outreach, and perform administrative operations.
+Welcome to the **Antigravity Marketing AI Agent Suite**! This guide details how to install the application, navigate the platform, leverage the AI-driven sales development representative (SDR) pipeline, qualify leads, and close deals through the sales confirmation process.
 
 ---
 
-## 1. Access Control & Roles
+## 1. Application Installation Wizard
 
-The application supports secure registration and two user roles:
+Before running the application, you must complete the initial configuration using the built-in Installation Wizard.
+
+### Accessing the Installer
+If the application is not yet configured, accessing the root URL (`http://127.0.0.1:8000/`) will automatically redirect you to the installer at:
+`http://127.0.0.1:8000/install`
+
+### Step-by-Step Installation Process
+
+1. **Prerequisite System Checks**:
+   The installer verifies system compatibility. All check indicators must be green to proceed:
+   - **PHP Version**: Must be PHP 8.0.0 or higher.
+   - **PDO Extensions**: Verifies that at least one PDO driver database extension is active (SQLite, MySQL, Postgres, SQL Server, or Oracle).
+   - **File Permissions**: Verifies that the root folder and the `database/` directory are writable for configuration saving.
+
+2. **Configure Database Connection**:
+   Select your preferred SQL driver and enter connection parameters:
+   - **SQLite**: (Recommended for simple setups) Specify the file path (default is `database/database.sqlite`).
+   - **MySQL / MariaDB / PostgreSQL / Microsoft SQL Server**: Enter host, port, database name, username, and password.
+   - **Oracle Database**: Enter host, port, credentials, and optional Oracle Service Name (SID).
+   - *Test Connection*: Click **Test Connection** to verify settings before continuing.
+
+3. **Create Administrator Account**:
+   Set up your primary system administrator credentials. Enter a username (minimum 3 characters), secure password (minimum 6 characters), full name, and email.
+
+4. **Global Configuration**:
+   - **Application Name**: Set the title displayed across login headers.
+   - **Google Gemini API Key**: Enter your Gemini API key (starts with `AIzaSy...`) obtained from Google AI Studio. This can be left blank and configured later.
+
+5. **Execute Installation**:
+   Click **Run Installer**. The installer will dynamically:
+   - Write settings to the `.env` file.
+   - Connect to the target database and execute migrations to create all 11 core tables.
+   - Seed the default "Premium Plan" (unlimited campaigns/leads).
+   - Register the admin account.
+   - Save default settings and generate the lock file `database/install.lock` to prevent future unauthorized database resets.
+
+---
+
+## 2. Access Control & User Roles
+
+Once installed, the application supports secure registration and two user roles:
 * **Administrator (admin)**: Full control over global system settings, user quotas, usage plans, SMTP configurations, database backups, reset/demo triggers, and system activity logs.
 * **User (user)**: Access to owned or shared campaigns, leads directories, contacts CRM, and the outreach workstation.
 
@@ -16,31 +56,9 @@ The application supports secure registration and two user roles:
 
 ---
 
-## 2. The Dashboard
-
-The Dashboard provides a unified overview of system status and quick access controls:
-
-### Resource Quotas & Balances
-Shows dynamic cards monitoring your active usage limits:
-- **LLM AI Runs**: Track AI generations used against plan limit.
-- **Campaigns**: Number of campaigns created.
-- **Leads CRM**: Size of CRM database.
-- **Outreach Logs**: Tracks Email, WhatsApp, and SMS messages sent.
-
-### Split Panel Sections (20:40:40)
-The bottom half of the dashboard contains three columns aligned to match height precisely:
-1. **Outreach Quick Actions (20% Width)**: Select a campaign to load qualified contacts. Displays company name, fit score, and delivery status badges. Includes a **Quick Send Email** action and an **Open in Workstation** redirect link.
-2. **Public Chat Room (40% Width)**: A live shared message board. Supports user tagging with `@username` which automatically sends email alerts.
-3. **System Notifications (40% Width)**: System-wide notifications feed. Administrators can publish announcements here. Admins also see trash-bin icons to delete historical alerts.
-
-> [!NOTE]
-> If the administrator hides the Public Chat or Notifications feeds from settings, the Outreach Mini Panel automatically expands to fill the remaining horizontal space.
-
----
-
 ## 3. Campaigns Management
 
-Campaigns define the target value proposition and audience for the AI SDR agents.
+Campaigns define the target value proposition and target audience for the AI SDR agents.
 
 ### Creating a Campaign
 1. Go to the **Campaigns** tab.
@@ -58,25 +76,30 @@ If you own a campaign, click the **Share** button to grant read/write access to 
 
 ---
 
-## 4. Leads Scraper & Qualification CRM
+## 4. Lead Qualification
 
-The AI SDR Agent crawls online directories and qualify prospects according to the campaign requirements.
+The AI SDR Agent crawls online directories and qualifies prospects based on the value proposition defined in your campaign.
 
-### Running the Scraper
-1. From the Campaign Workspace, click **Run AI Scraper Pipeline**.
-2. Select the **Active LLM Provider** model from settings.
-3. The AI agent will scrape results, qualify them, and populate the table with:
-   - **Company Name**
-   - **Contact Name & Postal Address**
-   - **Email Address & Mobile/WhatsApp Number**
-   - **Industry & Description**
-   - **Fit Score (0-100)**: AI-computed alignment score.
-   - **Qualification Reasoning**: Explanation of why the lead fits.
+```
+       [ Scraped / Manual Lead ] (Status: GENERATED)
+                   │
+                   ▼
+       [ AI Qualification Evaluation ]
+       ├── Computes Fit Score (0-100)
+       └── Writes Detailed Qualification Reasoning
+                   │
+                   ▼
+       [ Lead Status -> QUALIFIED ]
+```
 
-### Managing Prospects
-- **Search & Filter**: Search prospects dynamically by company name, industry, or contact details. Filter by Fit Score thresholds.
-- **Edit Leads**: Double-click any row to edit fields manually.
-- **Save to Contacts**: Click **Save to Contacts** to add the prospect to the shared Contacts Directory (keeps all address and telephone info intact).
+### The Qualification Process
+Leads can be qualification-assessed through two channels:
+1. **AI-Scraped Qualification**: When running the Lead Finder pipeline under a campaign, the AI Scraper gathers contact profiles (Company name, contact person, industry, description, and postal address). It automatically evaluates each prospect, assigning a **Fit Score** and a written **Qualification Reasoning**.
+2. **Manual Addition/Edit**: You can click **Add Lead** in the Contacts/Leads tab to add a lead manually. Here, you can define your own **Fit Score** (HIGH, MEDIUM, LOW) and provide custom qualification notes.
+
+### Fit Score and Reasoning
+- **Fit Score (0-100)**: Reflects the strength of the match between the prospect's profile/needs and your campaign's target audience and value proposition.
+- **Qualification Reasoning**: Explains why the lead matches or fails to match your campaign goals. This serves as critical context for writing outbound pitches.
 
 ---
 
@@ -102,9 +125,40 @@ The Outreach Workstation is where AI drafts personalized messages for individual
 
 ---
 
-## 6. System Configuration (Administrators Only)
+## 6. The Sales Confirmation Process (Close Lead)
 
-Click the cog icon on the top header to configure global options. The database panel features three interactive sub-tabs:
+Once a lead has been contacted, the sales pipeline advances to confirmation:
+
+```
+    [ Status: QUALIFIED ]
+               │
+               ▼  (Send Outreach Action)
+    [ Status: OUTREACHED ] (Outbound sent)
+               │
+               ▼  (Customer Responds positively & deal is verified)
+    [ Status: CLOSED ] (Sales Confirmation)
+```
+
+1. **Marking as Outreached**:
+   When you send a pitch to a prospect via Email, WhatsApp, or SMS, their status transitions to `OUTREACHED`. A progress badge on the sidebar lists and tables will show "outreached" in blue.
+
+2. **Sales Confirmation / Closing**:
+   When a prospect responds positively, book a call, or agree to a purchase deal:
+   - Go to the **Outreach** tab.
+   - Select the outreached lead from the contacts list.
+   - Scroll to the bottom of the workstation panel.
+   - Click the **Close Lead** button (represented by a handshake icon `fa-handshake`).
+   - The lead's status transitions to `CLOSED` (completed), representing successful sales confirmation.
+
+3. **Tracking Closed Deals**:
+   - Filter leads in the Leads/Contacts tables by selecting **CLOSED** from the status filter dropdown.
+   - The main **Dashboard** statistics dynamically increment the total closed CRM deals, allowing administrators to monitor conversions.
+
+---
+
+## 7. System Configuration (Administrators Only)
+
+Click the cog icon on the top header to configure global options:
 
 ### LLM / AI Configuration
 Toggle and configure API connections for active LLM providers:
@@ -122,17 +176,11 @@ Toggle and configure API connections for active LLM providers:
 - **SMS**: Select Twilio or input custom HTTP REST endpoint templates (using `{to}` and `{message}` placeholders).
 
 ### Database Management (Sub-tabs)
-1. **Backup**: Click **Download Backup File** to fetch a complete timestamped copy of the `.sqlite` database.
-2. **Restore**: Select a `.sqlite` or `.db` file and click **Restore Backup**. 
+1. **Backup**: Click **Download Backup File** to fetch a complete timestamped copy of the `.sqlite` database or a driver-agnostic `.json` database file.
+2. **Restore**: Select a `.sqlite`, `.db` or `.json` file and click **Restore Backup**. 
    > [!CAUTION]
    > Overwriting the database overwrites all user credentials, sessions, and configurations. You will be logged out upon success.
-   > The system verifies the SQLite file signature and connection integrity before overwriting. If the file is invalid, it rolls back to prevent data loss.
+   > The system verifies file signature and connection integrity before overwriting. If the file is invalid, it rolls back to prevent data loss.
 3. **Reset & Demo**:
    - **Load Demo Data**: Wipes campaigns/leads/logs/chats/notifications and seeds mock records (includes campaigns, qualified leads with drafts, welcome chats, and notifications) so the app is immediately testable. Keep current session active.
    - **Reset Application**: Deletes database file completely, rebuilds empty database schemas, and seeds default user credentials, logging the admin out.
-
-### Plugins Management (Settings Tab)
-Administrators can enable and disable dynamic features via the **Plugins** settings panel.
-* **View Installed Plugins**: Displays the title, description, version, and author for each discovered plugin inside the `plugins/` directory.
-* **Activation / Deactivation**: Toggle the **Activate** or **Deactivate** action buttons. The application automatically reloads to register or unregister the plugin's backend events, assets, and frontend components.
-

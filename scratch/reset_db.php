@@ -14,9 +14,33 @@ echo "==================================================\n\n";
 
 $dbFile = __DIR__ . '/../database/database.sqlite';
 
-if (file_exists($dbFile)) {
-    echo "Deleting existing database: {$dbFile}\n";
-    unlink($dbFile);
+$driver = strtolower(trim((string)getenv('DB_DRIVER') ?: 'sqlite'));
+if ($driver === 'mysql' || $driver === 'pdo_mysql') {
+    $host = getenv('DB_HOST') ?: '127.0.0.1';
+    $port = getenv('DB_PORT') ?: '3306';
+    $dbname = getenv('DB_DATABASE');
+    $username = getenv('DB_USERNAME');
+    $password = getenv('DB_PASSWORD');
+    $charset = getenv('DB_CHARSET') ?: 'utf8mb4';
+    
+    echo "Resetting MySQL database '{$dbname}'...\n";
+    $tempPdo = new PDO("mysql:host={$host};port={$port};dbname={$dbname};charset={$charset}", $username, $password, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+    ]);
+    
+    $tempPdo->exec("SET foreign_key_checks = 0");
+    $tables = ['plans', 'users', 'campaigns', 'campaign_shares', 'leads', 'agent_logs', 'user_activity_logs', 'email_otps', 'settings', 'notifications', 'public_chats'];
+    foreach ($tables as $table) {
+        $tempPdo->exec("DROP TABLE IF EXISTS `{$table}`");
+        echo "Dropped table: {$table}\n";
+    }
+    $tempPdo->exec("SET foreign_key_checks = 1");
+    echo "MySQL database tables dropped successfully.\n\n";
+} else {
+    if (file_exists($dbFile)) {
+        echo "Deleting existing database: {$dbFile}\n";
+        unlink($dbFile);
+    }
 }
 
 try {

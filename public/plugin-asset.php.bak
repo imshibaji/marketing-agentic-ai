@@ -1,0 +1,56 @@
+<?php
+require_once __DIR__ . '/../autoload.php';
+
+use MarketingAgent\Plugin\PluginManager;
+use MarketingAgent\Service\DatabaseService;
+
+try {
+    $db = new DatabaseService();
+    $pluginId = $_GET['plugin'] ?? '';
+    $type = $_GET['type'] ?? '';
+
+    // Sanitize plugin ID
+    $pluginId = preg_replace('/[^a-zA-Z0-9_-]/', '', $pluginId);
+    
+    if (empty($pluginId) || !in_array($type, ['js', 'css'])) {
+        http_response_code(400);
+        echo "Bad Request: Invalid plugin ID or asset type.";
+        exit;
+    }
+
+    // Check if plugin is active
+    $activePlugins = PluginManager::getActivePlugins();
+    if (!in_array($pluginId, $activePlugins)) {
+        http_response_code(403);
+        echo "Forbidden: Plugin is not active.";
+        exit;
+    }
+
+    // Resolve file path using PluginManager helper
+    $filePath = PluginManager::getPluginAssetPath($pluginId, $type);
+
+    if (!$filePath || !file_exists($filePath)) {
+        http_response_code(404);
+        echo "Not Found: Plugin asset file does not exist.";
+        exit;
+    }
+
+    // Set correct Content-Type header
+    if ($type === 'js') {
+        header('Content-Type: application/javascript; charset=UTF-8');
+    } else {
+        header('Content-Type: text/css; charset=UTF-8');
+    }
+
+    // Enable caching for better performance
+    header('Cache-Control: public, max-age=86400');
+    
+    // Output the file content
+    readfile($filePath);
+    exit;
+
+} catch (Exception $e) {
+    http_response_code(500);
+    echo "Internal Server Error: " . $e->getMessage();
+    exit;
+}
