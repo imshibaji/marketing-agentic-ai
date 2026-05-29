@@ -76,7 +76,11 @@ class GoogleScraperTool {
      */
     private function scrapeOrganicHtml(string $query, int $limit): array {
         $url = "https://www.google.com/search?q=" . urlencode($query) . "&num=" . ($limit + 5);
-        $html = $this->fetchUrl($url);
+        $html = $this->fetchUrlWithPanther($url);
+
+        if (!$html) {
+            $html = $this->fetchUrl($url);
+        }
 
         if (!$html) {
             return [];
@@ -145,7 +149,11 @@ class GoogleScraperTool {
     private function scrapeLocalHtml(string $query, int $limit): array {
         // Appending 'local' indicators to force local business pack viewport
         $url = "https://www.google.com/search?q=" . urlencode($query) . "&tbm=lcl";
-        $html = $this->fetchUrl($url);
+        $html = $this->fetchUrlWithPanther($url);
+
+        if (!$html) {
+            $html = $this->fetchUrl($url);
+        }
 
         if (!$html) {
             return [];
@@ -157,63 +165,175 @@ class GoogleScraperTool {
         $xpath = new DOMXPath($dom);
 
         $results = [];
-        
-        // Local listings block in HTML typically is held inside distinct visual elements
-        // This targets standard Google local/maps list nodes
-        $nodes = $xpath->query('//div[contains(@class, "Vkp9Pc") or contains(@class, "lcl-entry") or .//span[contains(@class, "OSrXXb")]]');
 
-        foreach ($nodes as $node) {
-            if (count($results) >= $limit) {
-                break;
-            }
-
-            // Extract business name
-            $nameNode = $xpath->query('.//div[contains(@class, "FCrY7c") or contains(@class, "dbg0pd")]//span', $node)->item(0);
-            if (!$nameNode) {
-                $nameNode = $xpath->query('.//span[contains(@class, "OSrXXb")]', $node)->item(0);
-            }
-            $name = $nameNode ? trim($nameNode->nodeValue) : '';
-
-            if (empty($name)) {
-                continue;
-            }
-
-            // Extract rating & review count
-            $ratingNode = $xpath->query('.//span[contains(@class, "Yw7A8b") or contains(@class, "UR1Yzb")]', $node)->item(0);
-            $rating = $ratingNode ? trim($ratingNode->nodeValue) : 'No Rating';
-
-            // Extract Address, Phone, details (usually sequential spans inside wrapper blocks)
-            $detailSpans = $xpath->query('.//div[contains(@class, "rllt__details")]//div', $node);
-            $details = [];
-            foreach ($detailSpans as $span) {
-                $txt = trim($span->nodeValue);
-                if (!empty($txt)) {
-                    $details[] = preg_replace('/\s+/', ' ', $txt);
+        // Try new rllt__details layout first (highly accurate for modern Google local pack)
+        $nodes = $xpath->query('//div[contains(@class, "rllt__details")]');
+        if ($nodes && $nodes->length > 0) {
+            foreach ($nodes as $node) {
+                if (count($results) >= $limit) {
+                    break;
                 }
+
+                // 1. Business Name
+                $nameNode = $xpath->query('.//div[contains(@class, "dbg0pd")]//span[contains(@class, "OSrXXb")]', $node)->item(0);
+                if (!$nameNode) {
+                    $nameNode = $xpath->query('.//div[contains(@class, "dbg0pd")]', $node)->item(0);
+                }
+                $name = $nameNode ? trim($nameNode->nodeValue) : '';
+                if (empty($name)) {
+                    continue;
+                }
+
+                // 2. Rating & Review Count
+                $ratingValNode = $xpath->query('.//span[contains(@class, "yi40Hd")]', $node)->item(0);
+                $ratingVal = $ratingValNode ? trim($ratingValNode->nodeValue) : '';
+
+                $reviewsCountNode = $xpath->query('.//span[contains(@class, "RDApEe")]', $node)->item(0);
+                $reviewsCount = $reviewsCountNode ? trim($reviewsCountNode->nodeValue) : '';
+
+                $rating = 'No Rating';
+                if ($ratingVal !== '') {
+                    $rating = $ratingVal . ' stars';
+                    if ($reviewsCount !== '') {
+                        $rating .= ' ' . $reviewsCount;
+                    }
+                }
+
+                // 3. Address and Phone from direct child divs
+                $childDivs = $xpath->query('./div', $node);
+                $lines = [];
+                foreach ($childDivs as $child) {
+                    $txt = trim($child->nodeValue);
+                    if ($child->getAttribute('class') === 'dbg0pd' || $child->getAttribute('class') === 'xnnzce') {
+                        continue;
+                    }
+                    if ($txt !== '') {
+                        $lines[] = preg_replace('/\s+/', ' ', $txt);
+                    }
+                }
+
+                $address = 'Address details unavailable';
+                $phone = 'No Phone Listed';
+
+                if (isset($lines[1])) {
+                    $parts = explode('·', $lines[1], 2);
+                    $address = trim($parts[0]);
+                    if (isset($parts[1])) {
+                        $phone = trim($parts[1]);
+                    }
+                } elseif (isset($lines[0])) {
+                    // Fallback if only 1 line
+                    $parts = explode('·', $lines[0], 2);
+                    if (count($parts) === 2 && !preg_match('/stars|\(\d+\)/', $parts[0])) {
+                        $address = trim($parts[0]);
+                        $phone = trim($parts[1]);
+                    }
+                }
+
+                // 4. Website URL (lookup inside parent/grandparent container)
+                $website = '';
+                $curr = $node;
+                $vkp = null;
+                while ($curr) {
+                    if ($curr->nodeType === XML_ELEMENT_NODE && (strpos($curr->getAttribute('class'), 'VkpGBb') !== false || strpos($curr->getAttribute('class'), 'uMdZh') !== false)) {
+                        $vkp = $curr;
+                        break;
+                    }
+                    $curr = $curr->parentNode;
+                }
+
+                if ($vkp) {
+                    $webLinks = $xpath->query('.//a[contains(., "Website")]', $vkp);
+                    if ($webLinks && $webLinks->length > 0) {
+                        $website = $webLinks->item(0)->getAttribute('href');
+                    }
+                }
+
+                // Clean Google redirect / adUrl
+                if (!empty($website)) {
+                    if (preg_match('/^\/url\?q=(.*?)&/', $website, $matches)) {
+                        $website = urldecode($matches[1]);
+                    } elseif (preg_match('/[?&]adurl=([^&]+)/', $website, $matches)) {
+                        $website = urldecode($matches[1]);
+                    }
+                }
+
+                $results[] = [
+                    'company_name' => $name,
+                    'rating' => $rating,
+                    'postal_address' => $address,
+                    'phone' => $phone,
+                    'website' => $website ?: 'No Website Listed'
+                ];
             }
-
-            $address = $details[1] ?? 'Address details unavailable';
-            $phone = $details[2] ?? 'No Phone Listed';
-
-            // Extract website if available
-            $websiteNode = $xpath->query('.//a[contains(@class, "yYg3ee") or contains(@class, "ab_button")][contains(@href, "http")]', $node)->item(0);
-            $website = $websiteNode ? $websiteNode->getAttribute('href') : '';
-
-            // Guard redirects on local links
-            if (!empty($website) && preg_match('/^\/url\?q=(.*?)&/', $website, $matches)) {
-                $website = urldecode($matches[1]);
-            }
-
-            $results[] = [
-                'company_name' => $name,
-                'rating' => $rating,
-                'postal_address' => $address,
-                'phone' => $phone,
-                'website' => $website ?: 'No Website Listed'
-            ];
         }
 
-        // If direct HTML scraper found nothing (e.g. captcha/markup change), return structured search context
+        // Fallback to old regex/nodes search if new layout failed to find any listings
+        if (empty($results)) {
+            $nodes = $xpath->query('//div[contains(@class, "Vkp9Pc") or contains(@class, "lcl-entry") or .//span[contains(@class, "OSrXXb")]]');
+            foreach ($nodes as $node) {
+                if (count($results) >= $limit) {
+                    break;
+                }
+
+                $nameNode = $xpath->query('.//div[contains(@class, "FCrY7c") or contains(@class, "dbg0pd")]//span', $node)->item(0);
+                if (!$nameNode) {
+                    $nameNode = $xpath->query('.//span[contains(@class, "OSrXXb")]', $node)->item(0);
+                }
+                $name = $nameNode ? trim($nameNode->nodeValue) : '';
+
+                if (empty($name)) {
+                    continue;
+                }
+
+                // Prevent duplicates in fallback
+                $isDup = false;
+                foreach ($results as $r) {
+                    if ($r['company_name'] === $name) {
+                        $isDup = true;
+                        break;
+                    }
+                }
+                if ($isDup) {
+                    continue;
+                }
+
+                $ratingNode = $xpath->query('.//span[contains(@class, "Yw7A8b") or contains(@class, "UR1Yzb")]', $node)->item(0);
+                $rating = $ratingNode ? trim($ratingNode->nodeValue) : 'No Rating';
+
+                $detailSpans = $xpath->query('.//div[contains(@class, "rllt__details")]//div', $node);
+                $details = [];
+                foreach ($detailSpans as $span) {
+                    $txt = trim($span->nodeValue);
+                    if (!empty($txt)) {
+                        $details[] = preg_replace('/\s+/', ' ', $txt);
+                    }
+                }
+
+                $address = $details[1] ?? 'Address details unavailable';
+                $phone = $details[2] ?? 'No Phone Listed';
+
+                $websiteNode = $xpath->query('.//a[contains(@class, "yYg3ee") or contains(@class, "ab_button") or contains(@class, "yYlJEf")][contains(@href, "http")]', $node)->item(0);
+                $website = $websiteNode ? $websiteNode->getAttribute('href') : '';
+
+                if (!empty($website)) {
+                    if (preg_match('/^\/url\?q=(.*?)&/', $website, $matches)) {
+                        $website = urldecode($matches[1]);
+                    } elseif (preg_match('/[?&]adurl=([^&]+)/', $website, $matches)) {
+                        $website = urldecode($matches[1]);
+                    }
+                }
+
+                $results[] = [
+                    'company_name' => $name,
+                    'rating' => $rating,
+                    'postal_address' => $address,
+                    'phone' => $phone,
+                    'website' => $website ?: 'No Website Listed'
+                ];
+            }
+        }
+
         return $results;
     }
 
@@ -357,5 +477,42 @@ class GoogleScraperTool {
         }
 
         return $results;
+    }
+
+    /**
+     * Bypasses CAPTCHA blocks using Symfony Panther with Chromium.
+     */
+    private function fetchUrlWithPanther(string $url): string|false {
+        $chromeDriverPath = defined('ROOTPATH') ? ROOTPATH . 'chromedriver' : '/Users/shibaji/.gemini/antigravity/scratch/marketing-ai-agent/chromedriver';
+        
+        $arguments = [
+            '--headless',
+            '--no-sandbox',
+            '--disable-gpu',
+            '--disable-blink-features=AutomationControlled',
+            '--window-size=1200,800',
+            '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+        ];
+
+        try {
+            if (!class_exists('Symfony\Component\Panther\Client')) {
+                return false;
+            }
+            $client = \Symfony\Component\Panther\Client::createChromeClient($chromeDriverPath, $arguments);
+            $client->request('GET', $url);
+            
+            sleep(4);
+            
+            $html = $client->getPageSource();
+            $client->quit();
+            
+            if (empty($html) || strpos($html, 'captcha') !== false || strpos($html, 'CAPTCHA') !== false) {
+                return false;
+            }
+            
+            return $html;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 }

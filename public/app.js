@@ -1,3 +1,50 @@
+// Safeguard DOM queries to prevent crashes in multi-page layout
+(function() {
+    const createMockElement = () => ({
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        setAttribute: () => {},
+        removeAttribute: () => {},
+        getAttribute: () => null,
+        hasAttribute: () => false,
+        classList: {
+            add: () => {},
+            remove: () => {},
+            toggle: () => {},
+            contains: () => false
+        },
+        style: {},
+        innerText: '',
+        textContent: '',
+        innerHTML: '',
+        value: '',
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        dispatchEvent: () => true,
+        click: () => {},
+        reset: () => {},
+        appendChild: (el) => el,
+        removeChild: (el) => el,
+        insertBefore: (el) => el,
+        focus: () => {},
+        blur: () => {}
+    });
+
+    const originalGet = document.getElementById;
+    document.getElementById = function(id) {
+        const el = originalGet.call(document, id);
+        if (el) return el;
+        return createMockElement();
+    };
+
+    const originalQuery = document.querySelector;
+    document.querySelector = function(selector) {
+        const el = originalQuery.call(document, selector);
+        if (el) return el;
+        return createMockElement();
+    };
+})();
+
 // Fire frontend hooks for app_init
 if (window.AppHooks) {
     window.AppHooks.doAction('app_init');
@@ -8,6 +55,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.AppHooks) {
         window.AppHooks.doAction('dom_ready');
     }
+    function safeParseDate(dateStr) {
+        if (!dateStr) return new Date();
+        if (typeof dateStr !== 'string') return new Date(dateStr);
+        // Replace space with T for ISO format compatibility (e.g. YYYY-MM-DD HH:MM:SS)
+        const normalized = dateStr.replace(' ', 'T');
+        const d = new Date(normalized);
+        if (isNaN(d.getTime())) {
+            // Fallback for Safari/Firefox if the string is still not parsed
+            const clean = dateStr.replace(/-/g, '/');
+            const d2 = new Date(clean);
+            if (!isNaN(d2.getTime())) return d2;
+        }
+        return d;
+    }
+
     // State management
     const state = {
         theme: 'dark',
@@ -615,7 +677,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="campaign-badge ${badgeClass}">${c.status}</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span class="campaign-item-meta">${c.channel.toUpperCase()} &bull; ${new Date(c.created_at).toLocaleDateString()}</span>
+                    <span class="campaign-item-meta">${c.channel.toUpperCase()} &bull; ${safeParseDate(c.created_at).toLocaleDateString()}</span>
                     ${!isShared ? `<button class="delete-campaign-btn" data-id="${c.id}" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:12px; padding:2px;"><i class="fas fa-trash"></i></button>` : ''}
                 </div>
             `;
@@ -690,7 +752,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Reset CRM scraper selectors to defaults
                 if (elements.crmLeadSourceType) {
-                    elements.crmLeadSourceType.value = 'default';
+                    elements.crmLeadSourceType.value = 'maps_search';
                     elements.crmLeadSourceType.dispatchEvent(new Event('change'));
                 }
                 if (elements.crmOutreachLanguage) {
@@ -775,7 +837,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function appendConsoleLogLine(agentName, action, text, timestamp) {
-        const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+        let time = '';
+        if (timestamp) {
+            if (typeof timestamp === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(timestamp.trim())) {
+                time = timestamp.trim();
+            } else {
+                const parsedDate = safeParseDate(timestamp);
+                time = isNaN(parsedDate.getTime()) ? timestamp : parsedDate.toLocaleTimeString();
+            }
+        } else {
+            time = new Date().toLocaleTimeString();
+        }
         
         const line = document.createElement('div');
         line.className = 'console-line';
@@ -1185,6 +1257,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function executeLeadsScraper(sourceType, location, keywords, sourceUrl) {
+        const filterCampaignSelect = document.getElementById('crm-campaign-filter');
+        const campaignId = filterCampaignSelect ? filterCampaignSelect.value : '';
+
+        if (!campaignId || campaignId === 'unsaved_scraper') {
+            alert('Please select a campaign from the dropdown at the top-left before running the scraper.');
+            if (filterCampaignSelect) filterCampaignSelect.focus();
+            return;
+        }
+
         const scraperSelect = document.getElementById('scraper-llm-provider');
         const selectedProvider = scraperSelect ? (scraperSelect.value || state.settings.llm_provider || 'gemini') : (state.settings.llm_provider || 'gemini');
         if (selectedProvider === 'gemini' && !state.settings.gemini_api_key) {
@@ -1203,6 +1284,7 @@ document.addEventListener('DOMContentLoaded', () => {
         appendConsoleLogLine("LeadsScraper", "START", "Starting Standalone Leads Scraper pipeline.");
 
         const params = new URLSearchParams({
+            campaign_id: campaignId,
             source_type: sourceType,
             location: location,
             keywords: keywords,
@@ -1369,6 +1451,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${escapeHtml(lead.reasoning)}
             </div>
 
+            ${lead.email_draft || lead.whatsapp_draft || lead.sms_draft ? `
+            <div class="outreach-drafts-section" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px; margin-bottom: 20px;">
+                <h4 style="font-size: 13px; margin-bottom: 12px; color: var(--text-primary);"><i class="fas fa-paper-plane" style="color:var(--accent-primary);"></i> Sample Generated Outreach Drafts</h4>
+                
+                <div class="draft-tabs" style="display:flex; gap:8px; margin-bottom:10px;">
+                    ${lead.email_draft ? `<button class="draft-tab-btn active" data-target="email-draft-box" style="padding:6px 12px; font-size:11px; font-weight:600; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-primary); cursor:pointer;">Email</button>` : ''}
+                    ${lead.whatsapp_draft ? `<button class="draft-tab-btn" data-target="whatsapp-draft-box" style="padding:6px 12px; font-size:11px; font-weight:600; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-secondary); cursor:pointer;">WhatsApp</button>` : ''}
+                    ${lead.sms_draft ? `<button class="draft-tab-btn" data-target="sms-draft-box" style="padding:6px 12px; font-size:11px; font-weight:600; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-secondary); cursor:pointer;">SMS</button>` : ''}
+                </div>
+
+                <div class="draft-contents">
+                    ${lead.email_draft ? `
+                    <div id="email-draft-box" class="draft-box" style="font-size:12px; padding:12px; background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; white-space:pre-wrap; line-height:1.4; color:var(--text-secondary); max-height: 250px; overflow-y: auto;">
+                        ${escapeHtml(lead.email_draft)}
+                    </div>
+                    ` : ''}
+                    ${lead.whatsapp_draft ? `
+                    <div id="whatsapp-draft-box" class="draft-box ${lead.email_draft ? 'hidden' : ''}" style="font-size:12px; padding:12px; background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; white-space:pre-wrap; line-height:1.4; color:var(--text-secondary); max-height: 250px; overflow-y: auto;">
+                        ${escapeHtml(lead.whatsapp_draft)}
+                    </div>
+                    ` : ''}
+                    ${lead.sms_draft ? `
+                    <div id="sms-draft-box" class="draft-box ${lead.email_draft || lead.whatsapp_draft ? 'hidden' : ''}" style="font-size:12px; padding:12px; background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; white-space:pre-wrap; line-height:1.4; color:var(--text-secondary); max-height: 250px; overflow-y: auto;">
+                        ${escapeHtml(lead.sms_draft)}
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+            ` : ''}
+
             <div style="margin-top: 30px;">
                 <button class="btn-primary" id="save-scraped-contact-btn" style="width:100%; display:flex; justify-content:center; align-items:center; gap:8px;" ${lead.saved ? 'disabled style="background:var(--border-color); color:var(--text-muted); border:none; cursor:not-allowed;"' : ''}>
                     <i class="fas ${lead.saved ? 'fa-check' : 'fa-save'}"></i>
@@ -1378,6 +1490,28 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         elements.leadDetailContent.innerHTML = detailsHtml;
+
+        // Hook up outreach drafts tab switching
+        const tabBtns = elements.leadDetailContent.querySelectorAll('.draft-tab-btn');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabBtns.forEach(b => {
+                    b.classList.remove('active');
+                    b.style.background = 'var(--bg-primary)';
+                    b.style.color = 'var(--text-secondary)';
+                });
+                btn.classList.add('active');
+                btn.style.background = 'var(--bg-card)';
+                btn.style.color = 'var(--text-primary)';
+
+                const boxes = elements.leadDetailContent.querySelectorAll('.draft-box');
+                boxes.forEach(box => box.classList.add('hidden'));
+
+                const targetId = btn.getAttribute('data-target');
+                const targetBox = elements.leadDetailContent.querySelector('#' + targetId);
+                if (targetBox) targetBox.classList.remove('hidden');
+            });
+        });
 
         // Hook up Save to Contacts button
         const saveBtn = document.getElementById('save-scraped-contact-btn');
@@ -1392,7 +1526,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             action: 'add_manual',
-                            campaign_id: '', // standalone lead
+                            campaign_id: lead.campaign_id || '',
                             company_name: lead.company_name,
                             contact_name: lead.contact_name,
                             postal_address: lead.postal_address,
@@ -1404,9 +1538,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             score: lead.score,
                             description: lead.description,
                             reasoning: lead.reasoning,
-                            email_draft: '',
-                            whatsapp_draft: '',
-                            sms_draft: ''
+                            email_draft: lead.email_draft || '',
+                            whatsapp_draft: lead.whatsapp_draft || '',
+                            sms_draft: lead.sms_draft || ''
                         })
                     });
 
@@ -1981,10 +2115,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 tabBtnPlans.classList.toggle('hidden', u.role !== 'admin');
             }
 
-            // Set default tab on login to unified dashboard
-            switchTab('admin-dashboard');
+            // Set default tab on login to current page tab
+            const initialTab = window.currentPageTab || 'admin-dashboard';
+            switchTab(initialTab);
         } else {
-            switchTab('campaigns');
+            const initialTab = window.currentPageTab || 'campaigns';
+            switchTab(initialTab);
         }
         // Load app data
         loadSettings();
@@ -2160,7 +2296,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     elements.loginPassword.setAttribute('required', 'required');
                     document.getElementById('login-email').removeAttribute('required');
                 }
-                showMainApp();
+                window.location.href = '/dashboard';
             } else {
                 elements.loginError.textContent = data.error || 'Login failed.';
                 elements.loginError.classList.add('visible');
@@ -2199,7 +2335,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 showToast('Account created! Please sign in.');
                 elements.registerForm.reset();
-                elements.authTabLogin.click();
+                window.location.href = '/login';
             } else {
                 elements.registerError.textContent = data.error || 'Registration failed.';
                 elements.registerError.classList.add('visible');
@@ -2224,7 +2360,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.activeCampaign = null;
         state.activeLead = null;
         localStorage.removeItem('active_campaign_id');
-        showAuthOverlay();
+        window.location.href = '/login';
     });
 
     // ----------------------------------------------------
@@ -2561,7 +2697,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 data.logs.forEach(log => {
-                    const time = new Date(log.created_at).toLocaleString();
+                    const time = safeParseDate(log.created_at).toLocaleString();
                     const item = document.createElement('div');
                     item.className = 'activity-log-item';
                     item.innerHTML = `
@@ -2619,7 +2755,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const logsToShow = data.logs.slice(0, 25);
                 logsToShow.forEach(log => {
-                    const time = new Date(log.created_at).toLocaleString();
+                    const time = safeParseDate(log.created_at).toLocaleString();
                     const item = document.createElement('div');
                     item.className = 'activity-log-item';
                     item.innerHTML = `
@@ -3966,7 +4102,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 data.notifications.forEach(notif => {
-                    const time = new Date(notif.created_at).toLocaleString();
+                    const time = safeParseDate(notif.created_at).toLocaleString();
                     const item = document.createElement('div');
                     item.style.cssText = 'background:var(--bg-primary); border:1px solid var(--border-color); border-radius:var(--border-radius-sm); padding:14px; display:flex; flex-direction:column; gap:6px; box-shadow:var(--shadow-sm);';
                     
@@ -4053,7 +4189,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 data.messages.forEach(msg => {
-                    const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const time = safeParseDate(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     const isMe = state.currentUser && parseInt(msg.user_id) === parseInt(state.currentUser.id);
                     
                     const bubble = document.createElement('div');

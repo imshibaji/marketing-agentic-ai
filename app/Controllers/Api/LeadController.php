@@ -237,10 +237,17 @@ class LeadController extends BaseApiController
 
     public function runLeads()
     {
-        set_time_limit(0);
-        if (ob_get_level()) {
+        // Disable output buffering
+        while (ob_get_level() > 0) {
             ob_end_clean();
         }
+        set_time_limit(0);
+        if (function_exists('apache_setenv')) {
+            @apache_setenv('no-gzip', '1');
+        }
+        @ini_set('zlib.output_compression', '0');
+        @ini_set('implicit_flush', '1');
+        ob_implicit_flush(true);
 
         $response = service('response');
         $response->setHeader('Content-Type', 'text/event-stream');
@@ -252,6 +259,9 @@ class LeadController extends BaseApiController
         $sendSseEvent = function(string $event, array $data): void {
             echo "event: {$event}\n";
             echo "data: " . json_encode($data) . "\n\n";
+            if (ob_get_level() > 0) {
+                ob_flush();
+            }
             flush();
         };
 
@@ -323,10 +333,17 @@ class LeadController extends BaseApiController
 
     public function runScraper()
     {
-        set_time_limit(0);
-        if (ob_get_level()) {
+        // Disable output buffering
+        while (ob_get_level() > 0) {
             ob_end_clean();
         }
+        set_time_limit(0);
+        if (function_exists('apache_setenv')) {
+            @apache_setenv('no-gzip', '1');
+        }
+        @ini_set('zlib.output_compression', '0');
+        @ini_set('implicit_flush', '1');
+        ob_implicit_flush(true);
 
         $response = service('response');
         $response->setHeader('Content-Type', 'text/event-stream');
@@ -338,6 +355,9 @@ class LeadController extends BaseApiController
         $sendSseEvent = function(string $event, array $data): void {
             echo "event: {$event}\n";
             echo "data: " . json_encode($data) . "\n\n";
+            if (ob_get_level() > 0) {
+                ob_flush();
+            }
             flush();
         };
 
@@ -352,6 +372,16 @@ class LeadController extends BaseApiController
         $keywords = $this->request->getGet('keywords') ?? '';
         $sourceUrl = $this->request->getGet('source_url') ?? '';
         $llmProvider = $this->request->getGet('llm_provider') ?? 'gemini';
+        $campaignId = $this->request->getGet('campaign_id');
+
+        $campaign = null;
+        if ($campaignId && is_numeric($campaignId)) {
+            $campaign = $this->db->getCampaign((int)$campaignId, (int)$user['id'], $user['role']);
+        }
+
+        $productDesc = $campaign ? $campaign['product_description'] : 'General Marketing Services';
+        $audience = $campaign ? $campaign['target_audience'] : 'Business Owners';
+        $outreachLanguage = $campaign ? ($campaign['language'] ?? 'English') : 'English';
 
         try {
             $llm = LlmFactory::create($this->db, $llmProvider, (int)$user['id']);
@@ -375,7 +405,89 @@ class LeadController extends BaseApiController
                 }
             }
 
-            $leads = $scraper->scrapeLeads($target);
+            $leads = $scraper->scrapeLeads($productDesc, $audience, $target);
+
+            $qualifiedLeads = [];
+            foreach ($leads as $index => $lead) {
+                $sendSseEvent('log', [
+                    'agent' => 'LeadsScraper',
+                    'action' => 'QUALIFYING_LEAD',
+                    'message' => "Filtering & qualifying prospect " . ($index + 1) . "/" . count($leads) . ": " . ($lead['company_name'] ?? 'Target Corp'),
+                    'timestamp' => date('H:i:s')
+                ]);
+
+                $companyName = $lead['company_name'] ?? 'Target Corp';
+                $contactName = $lead['contact_name'] ?? 'Decision Maker';
+                $postalAddress = $lead['postal_address'] ?? '';
+                $industry = $lead['industry'] ?? 'General';
+                $rawDesc = $lead['description'] ?? '';
+
+                $systemPrompt = "You are a high-performing Sales Development Representative (SDR) and outbound marketing expert.
+Your goal is to analyze a raw scraped business prospect profile, filter/summarize their description to highlight relevant requirements/notes, score their fit against our product's Ideal Customer Profile (ICP), and generate personalized outreach drafts.
+
+IMPORTANT: The outreach drafts (`email_draft`, `whatsapp_draft`, and `sms_draft`) must be written entirely in {$outreachLanguage}. Keep the qualification reasoning and description summary in English.
+
+You MUST respond with ONLY a raw JSON object containing exactly the following keys:
+{
+  \"description\": \"A filtered, professional 1-2 sentence summary of what this business does, their key requirements, or relevant notes regarding their fit for our product.\",
+  \"score\": \"HIGH\" or \"MEDIUM\" or \"LOW\",
+  \"reasoning\": \"A 2-3 sentence explanation (SDR AI Qualification Reasoning) of why they are scored this way and how the product fits their needs.\",
+  \"email_draft\": \"A personalized, short outbound sales email written in {$outreachLanguage}. Catchy Subject: line, greet them, introduce our product, end with a soft call-to-action.\",
+  \"whatsapp_draft\": \"A short, friendly WhatsApp message written in {$outreachLanguage}. Use emojis, convos style, highlight a key benefit, ask a low-friction question.\",
+  \"sms_draft\": \"A punchy SMS outreach message written in {$outreachLanguage} under 160 characters.\"
+}";
+
+                $userPrompt = "PRODUCT TO SELL:
+Product Description: {$productDesc}
+Target ICP: {$audience}
+
+PROSPECT PROFILE:
+Company: {$companyName}
+Contact Person: {$contactName}
+Address: {$postalAddress}
+Industry: {$industry}
+Scraped Metadata/Description: {$rawDesc}";
+
+                try {
+                    $response = $llm->generate($systemPrompt, $userPrompt, 0.7);
+                    $response = trim($response);
+                    $firstBracket = strpos($response, '{');
+                    $lastBracket = strrpos($response, '}');
+                    if ($firstBracket !== false && $lastBracket !== false && $lastBracket > $firstBracket) {
+                        $jsonString = substr($response, $firstBracket, $lastBracket - $firstBracket + 1);
+                        $qualification = json_decode($jsonString, true);
+                    } else {
+                        if (strpos($response, '```') === 0) {
+                            $response = preg_replace('/^```(?:json)?|```$/m', '', $response);
+                            $response = trim($response);
+                        }
+                        $qualification = json_decode($response, true);
+                    }
+
+                    if (!$qualification || !isset($qualification['score'])) {
+                        throw new Exception("Invalid JSON output from LLM.");
+                    }
+
+                    $lead['description'] = $qualification['description'] ?? $rawDesc;
+                    $lead['score'] = strtoupper($qualification['score']);
+                    $lead['reasoning'] = $qualification['reasoning'] ?? 'Fits basic industry parameters.';
+                    $lead['email_draft'] = $qualification['email_draft'] ?? '';
+                    $lead['whatsapp_draft'] = $qualification['whatsapp_draft'] ?? '';
+                    $lead['sms_draft'] = $qualification['sms_draft'] ?? '';
+
+                } catch (Exception $e) {
+                    $lead['score'] = 'MEDIUM';
+                    $lead['reasoning'] = "Lead belongs to {$industry} which aligns with our target segment. Good fit for initial cold testing.";
+                    $lead['email_draft'] = "Subject: Quick question regarding workflow efficiency at {$companyName}\n\nHi {$contactName},\n\nWould you be open to a brief call?";
+                    $lead['whatsapp_draft'] = "Hi {$contactName}! 👋 Hope your day is going well. Open to a quick chat about automating content creation?";
+                    $lead['sms_draft'] = "Hi {$contactName}, open to a quick call about automating content creation? - Outreach Team";
+                }
+
+                $lead['campaign_id'] = $campaignId;
+                $qualifiedLeads[] = $lead;
+            }
+            $leads = $qualifiedLeads;
+
             $this->db->logActivity((int)$user['id'], 'RUN_STANDALONE_SCRAPER', "Ran standalone scraper for target '{$target}', gathered " . count($leads) . " prospects.");
 
             $sendSseEvent('complete', [

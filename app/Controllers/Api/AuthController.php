@@ -41,10 +41,11 @@ class AuthController extends BaseApiController
     public function check(): ResponseInterface
     {
         $user = $this->getCurrentUser();
-        if ($user) {
-            return $this->respondSuccess(['user' => $user]);
-        }
-        return $this->respondError('Not logged in', 401);
+        return $this->respondSuccess([
+            'loggedIn' => $user !== null,
+            'logged_in' => $user !== null,
+            'user' => $user
+        ]);
     }
 
     public function register(): ResponseInterface

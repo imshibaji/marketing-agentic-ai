@@ -10,7 +10,16 @@ use Exception;
 class PluginManager {
     private static ?DatabaseService $db = null;
     private static array $loadedPlugins = [];
-    private static string $pluginsDir;
+    private static string $pluginsDir = '';
+
+    /**
+     * Ensures that PluginManager has been initialized. If not, constructs DatabaseService.
+     */
+    private static function ensureInitialized(): void {
+        if (self::$db === null || self::$pluginsDir === '') {
+            new \MarketingAgent\Service\DatabaseService();
+        }
+    }
 
     /**
      * Set up PluginManager, ensure directory exists, and load active plugins.
@@ -30,6 +39,7 @@ class PluginManager {
      * Retrieve current plugin directory path.
      */
     public static function getPluginsDir(): string {
+        self::ensureInitialized();
         return self::$pluginsDir;
     }
 
@@ -37,6 +47,7 @@ class PluginManager {
      * Retrieve active database service instance.
      */
     public static function getDatabaseService(): ?DatabaseService {
+        self::ensureInitialized();
         return self::$db;
     }
 
@@ -44,6 +55,7 @@ class PluginManager {
      * Fetches active plugin folders from database settings.
      */
     public static function getActivePlugins(): array {
+        self::ensureInitialized();
         if (!self::$db) {
             return [];
         }
@@ -63,6 +75,7 @@ class PluginManager {
      * Saves active plugin folders list to settings.
      */
     public static function saveActivePlugins(array $active): void {
+        self::ensureInitialized();
         if (!self::$db) {
             return;
         }
@@ -74,6 +87,7 @@ class PluginManager {
      * Reads custom entry points from plugin.json if defined.
      */
     public static function getPluginAssetPath(string $pluginId, string $type): ?string {
+        self::ensureInitialized();
         $pluginId = preg_replace('/[^a-zA-Z0-9_-]/', '', $pluginId);
         $dir = self::$pluginsDir . '/' . $pluginId;
         $jsonFile = $dir . '/plugin.json';
@@ -126,6 +140,7 @@ class PluginManager {
      * Scans plugins folder and returns all plugins metadata.
      */
     public static function getInstalledPlugins(): array {
+        self::ensureInitialized();
         $plugins = [];
         if (!is_dir(self::$pluginsDir)) {
             return [];
@@ -176,6 +191,7 @@ class PluginManager {
      * Activates a plugin.
      */
     public static function activatePlugin(string $id): bool {
+        self::ensureInitialized();
         $id = preg_replace('/[^a-zA-Z0-9_-]/', '', $id);
         $plugins = self::getInstalledPlugins();
         $exists = false;
@@ -202,6 +218,7 @@ class PluginManager {
      * Deactivates a plugin.
      */
     public static function deactivatePlugin(string $id): bool {
+        self::ensureInitialized();
         $id = preg_replace('/[^a-zA-Z0-9_-]/', '', $id);
         $active = self::getActivePlugins();
         if (($key = array_search($id, $active)) !== false) {

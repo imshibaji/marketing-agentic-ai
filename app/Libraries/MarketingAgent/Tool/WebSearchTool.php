@@ -355,7 +355,10 @@ class WebSearchTool {
 
     private function fetchDuckDuckGoSearchResults(string $query): ?array {
         $url = self::DUCKDUCKGO_HTML_ENDPOINT . '?q=' . urlencode($query) . '&kl=us-en&kp=-2';
-        $responseBody = $this->fetchUrl($url, ['Accept: text/html']);
+        $responseBody = $this->fetchUrlWithPanther($url);
+        if ($responseBody === false) {
+            $responseBody = $this->fetchUrl($url, ['Accept: text/html']);
+        }
         if ($responseBody === false) {
             return null;
         }
@@ -541,5 +544,42 @@ class WebSearchTool {
             'top_competitors' => $competitors,
             'frequent_questions' => $faqs
         ];
+    }
+
+    /**
+     * Bypasses CAPTCHA blocks using Symfony Panther with Chromium.
+     */
+    private function fetchUrlWithPanther(string $url): string|false {
+        $chromeDriverPath = defined('ROOTPATH') ? ROOTPATH . 'chromedriver' : '/Users/shibaji/.gemini/antigravity/scratch/marketing-ai-agent/chromedriver';
+        
+        $arguments = [
+            '--headless',
+            '--no-sandbox',
+            '--disable-gpu',
+            '--disable-blink-features=AutomationControlled',
+            '--window-size=1200,800',
+            '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+        ];
+
+        try {
+            if (!class_exists('Symfony\Component\Panther\Client')) {
+                return false;
+            }
+            $client = \Symfony\Component\Panther\Client::createChromeClient($chromeDriverPath, $arguments);
+            $client->request('GET', $url);
+            
+            sleep(4);
+            
+            $html = $client->getPageSource();
+            $client->quit();
+            
+            if (empty($html) || strpos($html, 'captcha') !== false || strpos($html, 'CAPTCHA') !== false) {
+                return false;
+            }
+            
+            return $html;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 }

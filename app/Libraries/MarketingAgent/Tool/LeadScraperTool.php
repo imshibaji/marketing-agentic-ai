@@ -30,7 +30,7 @@ class LeadScraperTool {
      * @param string $sourceUrl Custom input directory URL or Google Maps search query
      * @return array List of raw lead dicts
      */
-    public function scrapeLeads(string $productDescription, string $targetAudience, string $sourceUrl = ''): array {
+    public function scrapeLeads(string $productDescription = '', string $targetAudience = '', string $sourceUrl = ''): array {
         // Fallback default to Google Maps matching audience
         if (empty(trim($sourceUrl))) {
             $sourceUrl = "Google Maps Business Listing search for '" . $targetAudience . "'";
@@ -359,6 +359,15 @@ Format:
             return $targetAudience;
         }
 
+        // Clean verbose wrapper string e.g. "Google Maps Business Listing search for 'doctors' in kolkata"
+        if (preg_match("/Google Maps Business Listing search for '([^']+)'(?: in (.*))?/i", $sourceUrl, $matches)) {
+            $q = $matches[1];
+            if (!empty($matches[2])) {
+                $q .= " in " . $matches[2];
+            }
+            return $q;
+        }
+
         $sourceLower = strtolower($sourceUrl);
         if (strpos($sourceLower, 'location:') !== false) {
             return $sourceUrl;
@@ -440,6 +449,10 @@ Format:
         $html = $this->fetchUrl($pageUrl, [
             'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         ]);
+
+        if ($html === false) {
+            $html = $this->fetchUrlWithPanther($pageUrl);
+        }
 
         if ($html === false) {
             return [
@@ -576,5 +589,42 @@ Format:
         }
 
         return array_values(array_unique($links));
+    }
+
+    /**
+     * Helper to fetch individual website pages via Symfony Panther when simple cURL fails.
+     */
+    private function fetchUrlWithPanther(string $url): string|false {
+        $chromeDriverPath = defined('ROOTPATH') ? ROOTPATH . 'chromedriver' : '/Users/shibaji/.gemini/antigravity/scratch/marketing-ai-agent/chromedriver';
+        
+        $arguments = [
+            '--headless',
+            '--no-sandbox',
+            '--disable-gpu',
+            '--disable-blink-features=AutomationControlled',
+            '--window-size=1200,800',
+            '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+        ];
+
+        try {
+            if (!class_exists('Symfony\Component\Panther\Client')) {
+                return false;
+            }
+            $client = \Symfony\Component\Panther\Client::createChromeClient($chromeDriverPath, $arguments);
+            $client->request('GET', $url);
+            
+            sleep(4);
+            
+            $html = $client->getPageSource();
+            $client->quit();
+            
+            if (empty($html) || strpos($html, 'captcha') !== false || strpos($html, 'CAPTCHA') !== false) {
+                return false;
+            }
+            
+            return $html;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 }

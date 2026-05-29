@@ -12,7 +12,9 @@
     "require-dev": {
         "fakerphp/faker": "^1.23",
         "mikey179/vfsstream": "^1.6",
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "symfony/panther": "^2.4",
+        "dbrekelmans/bdi": "^1.4"
     },
     "autoload": {
         "psr-4": {

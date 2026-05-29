@@ -137,11 +137,17 @@ class CampaignController extends BaseApiController
 
     public function run()
     {
-        // Set execution limits and buffer clearing
-        set_time_limit(0);
-        if (ob_get_level()) {
+        // Disable output buffering
+        while (ob_get_level() > 0) {
             ob_end_clean();
         }
+        set_time_limit(0);
+        if (function_exists('apache_setenv')) {
+            @apache_setenv('no-gzip', '1');
+        }
+        @ini_set('zlib.output_compression', '0');
+        @ini_set('implicit_flush', '1');
+        ob_implicit_flush(true);
 
         $response = service('response');
         $response->setHeader('Content-Type', 'text/event-stream');
@@ -153,6 +159,9 @@ class CampaignController extends BaseApiController
         $sendSseEvent = function(string $event, array $data): void {
             echo "event: {$event}\n";
             echo "data: " . json_encode($data) . "\n\n";
+            if (ob_get_level() > 0) {
+                ob_flush();
+            }
             flush();
         };
 

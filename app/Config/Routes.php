@@ -3,12 +3,28 @@
 use CodeIgniter\Router\RouteCollection;
 
 /** @var RouteCollection $routes */
-$routes->get('/', 'Home::index');
+$routes->get('/', 'DashboardController::index', ['filter' => 'webauth']);
 
 // Install Routes
 $routes->get('install', 'InstallController::index');
 $routes->get('install.php', 'InstallController::action');
 $routes->post('install.php', 'InstallController::action');
+
+// Auth page routes (guest only)
+$routes->get('login', 'AuthController::login', ['filter' => 'guest']);
+$routes->get('register', 'AuthController::register', ['filter' => 'guest']);
+$routes->get('logout', 'AuthController::logout');
+
+// Protected page routes (webauth required)
+$routes->group('', ['filter' => 'webauth'], function($routes) {
+    $routes->get('dashboard', 'DashboardController::index');
+    $routes->get('campaigns', 'CampaignPageController::index');
+    $routes->get('leads', 'LeadPageController::index');
+    $routes->get('contacts', 'ContactPageController::index');
+    $routes->get('outreach', 'OutreachPageController::index');
+    $routes->get('users', 'UserPageController::index');
+    $routes->get('plans', 'PlanPageController::index');
+});
 
 // Serve Plugin Assets
 $routes->get('plugin-asset.php', 'PluginAssetsController::serve');
