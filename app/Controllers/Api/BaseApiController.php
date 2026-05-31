@@ -46,4 +46,15 @@ abstract class BaseApiController extends BaseController
             ->setStatusCode($statusCode)
             ->setJSON(['success' => false, 'error' => $error]);
     }
+
+    protected function isPlanExpired(?array $userDetails): bool
+    {
+        if (!$userDetails) return false;
+        if (($userDetails['role'] ?? '') === 'admin') return false;
+        
+        if (!empty($userDetails['plan_expires_at'])) {
+            return time() > strtotime($userDetails['plan_expires_at']);
+        }
+        return false;
+    }
 }

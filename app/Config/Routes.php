@@ -65,6 +65,8 @@ $routes->group('api', ['filter' => 'auth'], function($routes) {
     $routes->get('users.php', 'Api\UserController::index');
     $routes->post('users.php', 'Api\UserController::create');
     $routes->delete('users.php', 'Api\UserController::delete');
+    $routes->post('reset-usage.php', 'Api\UserController::resetUsage');
+    $routes->post('reset-plan.php', 'Api\UserController::resetPlan');
     $routes->get('activity.php', 'Api\UserController::activity');
     $routes->get('stats.php', 'Api\UserController::stats');
     $routes->get('usage.php', 'Api\UserController::usage');

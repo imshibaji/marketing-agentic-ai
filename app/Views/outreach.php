@@ -24,7 +24,27 @@
                 </select>
             </div>
 
+            <!-- Language Selector with Search -->
+            <div class="form-group" style="margin-bottom:0; display:flex; flex-direction:column; gap:6px; position:relative;">
+                <label for="outreach-language-search" style="font-size:11px; font-weight:600; color:var(--text-secondary);"><i class="fas fa-globe"></i> Content Language</label>
+                <div id="outreach-language-picker" style="position:relative;">
+                    <div id="outreach-language-display" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-color); padding:8px 32px 8px 10px; border-radius:6px; font-family:var(--font-body); font-size:12px; color:var(--text-primary); cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none; box-sizing:border-box;">
+                        <span id="outreach-language-label"><i class="fas fa-flag" style="margin-right:5px; opacity:0.6;"></i>English</span>
+                        <i class="fas fa-chevron-down" id="outreach-language-chevron" style="font-size:10px; color:var(--text-muted); transition:transform 0.2s; pointer-events:none;"></i>
+                    </div>
+                    <input type="hidden" id="outreach-language-value" value="English">
+                    <!-- Dropdown panel -->
+                    <div id="outreach-language-dropdown" style="display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px; z-index:9999; box-shadow:0 8px 24px rgba(0,0,0,0.3); overflow:hidden; max-height:280px; flex-direction:column;">
+                        <div style="padding:8px; border-bottom:1px solid var(--border-color);">
+                            <input type="text" id="outreach-language-search" placeholder="&#128269; Search language..." autocomplete="off" style="width:100%; padding:7px 10px; border-radius:5px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); font-size:12px; font-family:var(--font-body); outline:none; box-sizing:border-box;">
+                        </div>
+                        <div id="outreach-language-list" style="overflow-y:auto; max-height:210px; padding:4px;"></div>
+                    </div>
+                </div>
+            </div>
+
             <hr style="border:0; border-top:1px solid var(--border-color); margin:4px 0;">
+
 
             <div style="display:flex; flex-direction:column; flex-grow:1; min-height:0; overflow:hidden;">
                 <h4 style="font-size:12px; font-weight:600; color:var(--text-secondary); margin:0 0 10px 0; display:flex; align-items:center; justify-content:space-between;">
@@ -44,7 +64,7 @@
             <div id="outreach-empty-state" style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; text-align:center; gap:12px; color:var(--text-muted);">
                 <i class="fas fa-envelope-open-text" style="font-size:48px; color:var(--border-color);"></i>
                 <h4 style="margin:0; font-size:16px; color:var(--text-secondary);">Outreach Workstation</h4>
-                <p style="margin:0; font-size:13px; max-width:400px; line-height:1.5;">Select a campaign and a contact card from the sidebar list to generate and manage outreach emails, WhatsApp messages, or SMS drafts.</p>
+                <p style="margin:0; font-size:13px; max-width:400px; line-height:1.5;">Select a campaign and a contact card from the sidebar list to generate and manage outreach emails, WhatsApp messages, SMS drafts, or phone call scripts.</p>
             </div>
 
             <!-- Workspace Content (hidden by default) -->
@@ -55,6 +75,16 @@
                         <div>
                             <h4 id="outreach-contact-company" style="font-size:18px; margin:0 0 4px 0; font-family:var(--font-heading);">Company Name</h4>
                             <span id="outreach-contact-score" class="lead-score-badge">HIGH FIT</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                            <label style="font-size:10px; font-weight:600; color:var(--text-muted);"><i class="fas fa-tag"></i> Lead Status</label>
+                            <select id="outreach-lead-status-select" style="font-size:11px; padding:4px 8px; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); cursor:pointer; outline:none;">
+                                <option value="GENERATED">Generated</option>
+                                <option value="QUALIFIED">Qualified</option>
+                                <option value="OUTREACHED">Outreached</option>
+                                <option value="CLOSED">Closed</option>
+                                <option value="LOST">Lost</option>
+                            </select>
                         </div>
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:4px;">
@@ -79,6 +109,7 @@
                         <button class="outreach-tab-btn active" id="outreach-pane-tab-email"><i class="fas fa-envelope"></i> Email Draft</button>
                         <button class="outreach-tab-btn" id="outreach-pane-tab-whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp Draft</button>
                         <button class="outreach-tab-btn" id="outreach-pane-tab-sms"><i class="fas fa-comment-alt"></i> SMS Draft</button>
+                        <button class="outreach-tab-btn" id="outreach-pane-tab-calls"><i class="fas fa-phone"></i> Call Script</button>
                     </div>
 
                     <textarea id="outreach-pane-textarea" style="width:100%; flex-grow:1; min-height:150px; padding:16px; font-family:monospace; font-size:13px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-color); border-radius:6px; outline:none; resize:none; line-height:1.5;"></textarea>

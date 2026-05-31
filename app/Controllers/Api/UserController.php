@@ -281,6 +281,7 @@ class UserController extends BaseApiController
 
         return $this->respondSuccess([
             'plan_name' => $row['plan_name'] ?? 'Default Plan',
+            'plan_expires_at' => $row['plan_expires_at'] ?? null,
             'active_providers' => $activeProviders,
             'usage' => [
                 'llm'       => ['used' => $llmUsed,      'limit' => $llmLimit],
@@ -371,5 +372,61 @@ class UserController extends BaseApiController
         } catch (Exception $e) {
             return $this->respondError($e->getMessage(), 500);
         }
+    }
+
+    public function resetUsage(): ResponseInterface
+    {
+        $admin = $this->getCurrentUser();
+        if (!$admin || $admin['role'] !== 'admin') {
+            return $this->respondError('Forbidden. Admin access required.', 403);
+        }
+
+        $input = $this->getJsonInput();
+        $userId = $input['user_id'] ?? null;
+        if (!$userId) {
+            $userId = $this->request->getGet('user_id');
+        }
+
+        if (!$userId) {
+            return $this->respondError('Missing user ID.');
+        }
+
+        $u = $this->db->getUserById((int)$userId);
+        if (!$u) {
+            return $this->respondError('User not found.', 404);
+        }
+
+        $this->db->resetUserUsage((int)$userId);
+        $this->db->logActivity((int)$admin['id'], 'RESET_USAGE', "Admin reset usage for user '{$u['username']}' (ID: {$userId})");
+
+        return $this->respondSuccess([], 'User usage reset successfully.');
+    }
+
+    public function resetPlan(): ResponseInterface
+    {
+        $admin = $this->getCurrentUser();
+        if (!$admin || $admin['role'] !== 'admin') {
+            return $this->respondError('Forbidden. Admin access required.', 403);
+        }
+
+        $input = $this->getJsonInput();
+        $userId = $input['user_id'] ?? null;
+        if (!$userId) {
+            $userId = $this->request->getGet('user_id');
+        }
+
+        if (!$userId) {
+            return $this->respondError('Missing user ID.');
+        }
+
+        $u = $this->db->getUserById((int)$userId);
+        if (!$u) {
+            return $this->respondError('User not found.', 404);
+        }
+
+        $this->db->resetUserPlan((int)$userId);
+        $this->db->logActivity((int)$admin['id'], 'RESET_PLAN_EXPIRY', "Admin reset/renewed plan expiration for user '{$u['username']}' (ID: {$userId})");
+
+        return $this->respondSuccess([], 'User plan reset/renewed successfully.');
     }
 }

@@ -84,6 +84,9 @@ class CampaignController extends BaseApiController
 
         // Plan limits check
         $userDetails = $this->db->getUserById((int)$user['id']);
+        if ($this->isPlanExpired($userDetails)) {
+            return $this->respondError("Plan expired. Your plan expired on {$userDetails['plan_expires_at']}. Please contact an administrator to renew.", 403);
+        }
         if ($user['role'] !== 'admin' && $userDetails['plan_campaigns'] !== -1) {
             $campaignCount = $this->db->getUserCampaignCount((int)$user['id']);
             if ($campaignCount >= $userDetails['plan_campaigns']) {
@@ -184,6 +187,10 @@ class CampaignController extends BaseApiController
         }
 
         $userDetails = $this->db->getUserById((int)$user['id']);
+        if ($this->isPlanExpired($userDetails)) {
+            $sendSseEvent('error', ['message' => "Plan expired. Your plan expired on {$userDetails['plan_expires_at']}. Please contact an administrator to renew."]);
+            exit;
+        }
         if ($userDetails && $userDetails['role'] !== 'admin' && $userDetails['plan_llm'] !== -1) {
             if ($userDetails['llm_usage'] >= $userDetails['plan_llm']) {
                 $sendSseEvent('error', ['message' => "LLM/AI quota exceeded. You have used {$userDetails['llm_usage']} of {$userDetails['plan_llm']} allowed generations. Please upgrade your plan."]);

@@ -19,13 +19,14 @@ class Lead extends BaseModel {
         string $source = 'agent',
         ?string $mobile = null,
         ?string $smsDraft = null,
-        ?string $postalAddress = null
+        ?string $postalAddress = null,
+        ?string $callsDraft = null
     ): int {
         $stmt = $this->pdo->prepare("INSERT INTO leads 
-            (campaign_id, company_name, contact_name, email, whatsapp, mobile, industry, description, score, reasoning, email_draft, whatsapp_draft, sms_draft, user_id, source, postal_address) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            (campaign_id, company_name, contact_name, email, whatsapp, mobile, industry, description, score, reasoning, email_draft, whatsapp_draft, sms_draft, calls_draft, user_id, source, postal_address) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
-            $campaignId, $companyName, $contactName, $email, $whatsapp, $mobile, $industry, $description, $score, $reasoning, $emailDraft, $whatsappDraft, $smsDraft, $userId, $source, $postalAddress
+            $campaignId, $companyName, $contactName, $email, $whatsapp, $mobile, $industry, $description, $score, $reasoning, $emailDraft, $whatsappDraft, $smsDraft, $callsDraft, $userId, $source, $postalAddress
         ]);
         return (int)$this->pdo->lastInsertId();
     }
@@ -87,7 +88,9 @@ class Lead extends BaseModel {
         ?string $mobile = null,
         ?int $userId = null,
         ?string $smsDraft = null,
-        ?string $postalAddress = null
+        ?string $postalAddress = null,
+        ?string $status = null,
+        ?string $callsDraft = null
     ): void {
         if ($userId !== null) {
             $stmt = $this->pdo->prepare("UPDATE leads SET 
@@ -103,15 +106,17 @@ class Lead extends BaseModel {
                 email_draft = ?,
                 whatsapp_draft = ?,
                 sms_draft = ?,
+                calls_draft = ?,
                 source = ?,
                 mobile = ?,
                 user_id = ?,
-                postal_address = ?
+                postal_address = ?,
+                status = COALESCE(?, status)
                 WHERE id = ?");
             $stmt->execute([
                 $campaignId, $companyName, $contactName, $email, $whatsapp,
                 $industry, $description, $score, $reasoning, $emailDraft,
-                $whatsappDraft, $smsDraft, $source, $mobile, $userId, $postalAddress, $id
+                $whatsappDraft, $smsDraft, $callsDraft, $source, $mobile, $userId, $postalAddress, $status, $id
             ]);
         } else {
             $stmt = $this->pdo->prepare("UPDATE leads SET 
@@ -127,14 +132,16 @@ class Lead extends BaseModel {
                 email_draft = ?,
                 whatsapp_draft = ?,
                 sms_draft = ?,
+                calls_draft = ?,
                 source = ?,
                 mobile = ?,
-                postal_address = ?
+                postal_address = ?,
+                status = COALESCE(?, status)
                 WHERE id = ?");
             $stmt->execute([
                 $campaignId, $companyName, $contactName, $email, $whatsapp,
                 $industry, $description, $score, $reasoning, $emailDraft,
-                $whatsappDraft, $smsDraft, $source, $mobile, $postalAddress, $id
+                $whatsappDraft, $smsDraft, $callsDraft, $source, $mobile, $postalAddress, $status, $id
             ]);
         }
     }
@@ -144,9 +151,9 @@ class Lead extends BaseModel {
         $stmt->execute([$status, $id]);
     }
 
-    public function updateLeadDrafts(int $id, string $emailDraft, string $whatsappDraft, ?string $smsDraft = null): void {
-        $stmt = $this->pdo->prepare("UPDATE leads SET email_draft = ?, whatsapp_draft = ?, sms_draft = ? WHERE id = ?");
-        $stmt->execute([$emailDraft, $whatsappDraft, $smsDraft, $id]);
+    public function updateLeadDrafts(int $id, string $emailDraft, string $whatsappDraft, ?string $smsDraft = null, ?string $callsDraft = null): void {
+        $stmt = $this->pdo->prepare("UPDATE leads SET email_draft = ?, whatsapp_draft = ?, sms_draft = ?, calls_draft = ? WHERE id = ?");
+        $stmt->execute([$emailDraft, $whatsappDraft, $smsDraft, $callsDraft, $id]);
     }
 
     public function deleteLead(int $id): void {
@@ -179,6 +186,7 @@ class Lead extends BaseModel {
             email_draft TEXT,
             whatsapp_draft TEXT,
             sms_draft TEXT,
+            calls_draft TEXT,
             status {$vc} DEFAULT 'GENERATED',
             user_id INTEGER,
             source {$vc} DEFAULT 'agent',
@@ -190,6 +198,7 @@ class Lead extends BaseModel {
         $this->schema->addColumnIfNotExists('leads', 'source', "{$vc} DEFAULT 'agent'");
         $this->schema->addColumnIfNotExists('leads', 'mobile', 'TEXT');
         $this->schema->addColumnIfNotExists('leads', 'sms_draft', 'TEXT');
+        $this->schema->addColumnIfNotExists('leads', 'calls_draft', 'TEXT');
         $this->schema->addColumnIfNotExists('leads', 'postal_address', 'TEXT');
     }
 }

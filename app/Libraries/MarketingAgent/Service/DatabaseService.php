@@ -109,6 +109,10 @@ class DatabaseService {
             }
         }
 
+        // Run core model schema initializations to ensure database columns are added
+        $this->planModel->initializeSchema();
+        $this->userModel->initializeSchema();
+
         // Let active plugins initialize custom schemas
         \MarketingAgent\Plugin\HookManager::doAction('db_initialize_schema', $this);
     }
@@ -286,12 +290,14 @@ class DatabaseService {
         ?string $mobile = null,
         ?int $userId = null,
         ?string $smsDraft = null,
-        ?string $postalAddress = null
+        ?string $postalAddress = null,
+        ?string $status = null,
+        ?string $callsDraft = null
     ): void {
         $this->leadModel->updateLead(
             $id, $campaignId, $companyName, $contactName, $email, $whatsapp,
             $industry, $description, $score, $reasoning, $emailDraft,
-            $whatsappDraft, $source, $mobile, $userId, $smsDraft, $postalAddress
+            $whatsappDraft, $source, $mobile, $userId, $smsDraft, $postalAddress, $status, $callsDraft
         );
     }
 
@@ -299,8 +305,8 @@ class DatabaseService {
         $this->leadModel->updateLeadStatus($id, $status);
     }
 
-    public function updateLeadDrafts(int $id, string $emailDraft, string $whatsappDraft, ?string $smsDraft = null): void {
-        $this->leadModel->updateLeadDrafts($id, $emailDraft, $whatsappDraft, $smsDraft);
+    public function updateLeadDrafts(int $id, string $emailDraft, string $whatsappDraft, ?string $smsDraft = null, ?string $callsDraft = null): void {
+        $this->leadModel->updateLeadDrafts($id, $emailDraft, $whatsappDraft, $smsDraft, $callsDraft);
     }
 
     public function deleteLead(int $id): void {
@@ -341,15 +347,23 @@ class DatabaseService {
         return $this->planModel->getPlan($id);
     }
 
-    public function createPlan(string $name, int $campaignLimit, int $leadLimit, int $llmLimit = 100, int $emailLimit = 100, int $whatsappLimit = 100, int $smsLimit = 100): int {
-        return $this->planModel->createPlan($name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit);
+    public function createPlan(string $name, int $campaignLimit, int $leadLimit, int $llmLimit = 100, int $emailLimit = 100, int $whatsappLimit = 100, int $smsLimit = 100, string $duration = '1 Month'): int {
+        return $this->planModel->createPlan($name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit, $duration);
     }
 
-    public function updatePlan(int $id, string $name, int $campaignLimit, int $leadLimit, int $llmLimit = 100, int $emailLimit = 100, int $whatsappLimit = 100, int $smsLimit = 100): void {
-        $this->planModel->updatePlan($id, $name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit);
+    public function updatePlan(int $id, string $name, int $campaignLimit, int $leadLimit, int $llmLimit = 100, int $emailLimit = 100, int $whatsappLimit = 100, int $smsLimit = 100, string $duration = '1 Month'): void {
+        $this->planModel->updatePlan($id, $name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit, $duration);
     }
 
     public function deletePlan(int $id): void {
         $this->planModel->deletePlan($id);
+    }
+
+    public function resetUserUsage(int $userId): void {
+        $this->userModel->resetUserUsage($userId);
+    }
+
+    public function resetUserPlan(int $userId): void {
+        $this->userModel->resetUserPlan($userId);
     }
 }

@@ -60,20 +60,22 @@
             </div>
 
             <div class="form-row">
-                <div class="form-group">
-                    <label for="campaign_language">Campaign Target Language</label>
-                    <select id="campaign_language" required>
-                        <option value="English">English</option>
-                        <option value="Bengali">Bengali (বাংলা)</option>
-                        <option value="Hindi">Hindi (हिन्दी)</option>
-                        <option value="Tamil">Tamil (தமிழ்)</option>
-                        <option value="Telugu">Telugu (తెలుగు)</option>
-                        <option value="Marathi">Marathi (मराठी)</option>
-                        <option value="Kannada">Kannada (ಕನ್ನಡ)</option>
-                        <option value="Gujarati">Gujarati (ગુજરાતી)</option>
-                        <option value="Malayalam">Malayalam (മലയാളം)</option>
-                        <option value="Punjabi">Punjabi (ਪੰਜਾਬੀ)</option>
-                    </select>
+                <div class="form-group" style="position:relative;">
+                    <label for="campaign-language-search"><i class="fas fa-globe"></i> Campaign Target Language</label>
+                    <div id="campaign-language-picker" style="position:relative;">
+                        <div id="campaign-language-display" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-color); padding:10px 32px 10px 12px; border-radius:6px; font-family:var(--font-body); font-size:13px; color:var(--text-primary); cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none; box-sizing:border-box;">
+                            <span id="campaign-language-label"><i class="fas fa-flag" style="margin-right:5px; opacity:0.6;"></i>English</span>
+                            <i class="fas fa-chevron-down" id="campaign-language-chevron" style="font-size:10px; color:var(--text-muted); transition:transform 0.2s; pointer-events:none;"></i>
+                        </div>
+                        <input type="hidden" id="campaign_language" value="English">
+                        <!-- Dropdown panel -->
+                        <div id="campaign-language-dropdown" style="display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px; z-index:9999; box-shadow:0 8px 24px rgba(0,0,0,0.3); overflow:hidden; max-height:280px; flex-direction:column;">
+                            <div style="padding:8px; border-bottom:1px solid var(--border-color);">
+                                <input type="text" id="campaign-language-search" placeholder="&#128269; Search language..." autocomplete="off" style="width:100%; padding:7px 10px; border-radius:5px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); font-size:12px; font-family:var(--font-body); outline:none; box-sizing:border-box;">
+                            </div>
+                            <div id="campaign-language-list" style="overflow-y:auto; max-height:210px; padding:4px;"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

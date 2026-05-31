@@ -12,7 +12,10 @@
     <div class="panel-section card-box" style="margin-bottom:24px; padding:20px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--border-radius-md); box-shadow:var(--shadow-sm);">
         <h3 style="margin:0 0 16px; font-size:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:10px;">
             <span><i class="fas fa-tachometer-alt" style="color:var(--accent-primary); margin-right:6px;"></i> My Resource Quotas & Balances</span>
-            <span id="dashboard-plan-badge" style="font-size:11px; padding:4px 8px; background:var(--accent-primary-gradient); color:white; border-radius:12px; font-weight:600;">Plan: loading...</span>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <span id="dashboard-plan-expiry" style="font-size:11px; padding:4px 8px; background:rgba(245,158,11,0.15); color:#F59E0B; border:1px solid rgba(245,158,11,0.3); border-radius:12px; font-weight:600; display:none;">Expires: loading...</span>
+                <span id="dashboard-plan-badge" style="font-size:11px; padding:4px 8px; background:var(--accent-primary-gradient); color:white; border-radius:12px; font-weight:600;">Plan: loading...</span>
+            </div>
         </h3>
         <div id="dashboard-quota-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
             <!-- Dynamic Quota Cards filled by JS -->

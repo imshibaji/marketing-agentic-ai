@@ -49,6 +49,9 @@ class OutreachController extends BaseApiController
 
             // Check and Enforce Quotas
             $userDetails = $this->db->getUserById((int)$user['id']);
+            if ($this->isPlanExpired($userDetails)) {
+                return $this->respondError("Plan expired. Your plan expired on {$userDetails['plan_expires_at']}. Please contact an administrator to renew.", 403);
+            }
             if ($userDetails && $userDetails['role'] !== 'admin') {
                 if ($type === 'email') {
                     if ($userDetails['plan_email'] !== -1 && $userDetails['email_usage'] >= $userDetails['plan_email']) {
@@ -164,6 +167,10 @@ class OutreachController extends BaseApiController
 
     public function generate(): ResponseInterface
     {
+        // Allow LLM calls to run without PHP execution time limit
+        set_time_limit(0);
+        @ini_set('max_execution_time', '0');
+
         try {
             $user = $this->getCurrentUser();
             if (!$user) {
@@ -208,14 +215,19 @@ class OutreachController extends BaseApiController
             $postalAddress = $lead['postal_address'] ?? 'N/A';
             $leadDesc = $lead['description'] ?? 'N/A';
 
+            $userDetails = $this->db->getUserById((int)$user['id']);
+            if ($this->isPlanExpired($userDetails)) {
+                return $this->respondError("Plan expired. Your plan expired on {$userDetails['plan_expires_at']}. Please contact an administrator to renew.", 403);
+            }
+
             // Create LLM instance
             $selectedProvider = $llmProvider ?: ($campaign['llm_provider'] ?? 'gemini');
             $llm = LlmFactory::create($this->db, $selectedProvider, (int)$user['id']);
 
             $systemPrompt = "You are a high-performing Sales Development Representative (SDR) and outbound marketing expert. 
-Your goal is to write personalized outreach drafts for a prospect across three channels: Email, WhatsApp, and SMS.
+Your goal is to write personalized outreach drafts for a prospect across four channels: Email, WhatsApp, SMS, and Phone Call.
 
-IMPORTANT: The outreach drafts (`email_draft`, `whatsapp_draft`, and `sms_draft`) must be written entirely in {$outreachLanguage}.
+IMPORTANT: The outreach drafts (`email_draft`, `whatsapp_draft`, `sms_draft`, and `calls_draft`) must be written entirely in {$outreachLanguage}.
 
 You will receive details about the product/service and target audience, along with the prospect's profile.
 
@@ -223,7 +235,8 @@ You MUST respond with ONLY a raw JSON object containing exactly the following ke
 {
   \"email_draft\": \"A personalized, short, compelling outbound sales email written in {$outreachLanguage}. It should have a catchy Subject: line, greet them by name, state the problem they likely face, introduce the product, and end with a soft call-to-action.\",
   \"whatsapp_draft\": \"A short, friendly, direct WhatsApp message written in {$outreachLanguage}. Use emojis, write conversationally, highlight a single key benefit, and ask a low-friction question like 'Would you be open to a 2-minute chat next week?'\",
-  \"sms_draft\": \"A very short, punchy SMS outreach message written in {$outreachLanguage}. Must be strictly under 160 characters, direct, friendly, prompting a quick reply.\"
+  \"sms_draft\": \"A very short, punchy SMS outreach message written in {$outreachLanguage}. Must be strictly under 160 characters, direct, friendly, prompting a quick reply.\",
+  \"calls_draft\": \"A concise, professional phone call script written in {$outreachLanguage}. Include: (1) Opening greeting and introduction, (2) Purpose of the call and value proposition, (3) 1-2 qualifying questions, (4) Handling a common objection, (5) Closing with a clear CTA (meeting/demo/callback). Keep it under 90 seconds when spoken.\"
 }
 
 Do not include markdown code block formatting (like ```json). Just the raw JSON.
@@ -242,24 +255,41 @@ Description/Notes: {$leadDesc}";
 
             $response = $llm->generate($systemPrompt, $userPrompt, 0.7);
 
-            // Clean LLM response
+            // Clean LLM response — strip markdown code fences if present
             $response = trim($response);
-            if (strpos($response, '```') === 0) {
-                $response = preg_replace('/^```(?:json)?|```$/m', '', $response);
-                $response = trim($response);
-            }
+            // Strip ```json ... ``` or ``` ... ``` wrappers
+            $response = preg_replace('/^```(?:json)?\s*/i', '', $response);
+            $response = preg_replace('/\s*```\s*$/', '', $response);
+            $response = trim($response);
 
             $data = json_decode($response, true);
-            if (!$data || (!isset($data['email_draft']) && !isset($data['whatsapp_draft']) && !isset($data['sms_draft']))) {
-                throw new Exception("Invalid JSON output structure returned by the AI Model. Raw response was: " . $response);
+
+            // If JSON decode failed, try regex extraction as fallback
+            if (!$data || json_last_error() !== JSON_ERROR_NONE) {
+                $data = [];
+                if (preg_match('/"email_draft"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/', $response, $m)) {
+                    $data['email_draft'] = stripcslashes($m[1]);
+                }
+                if (preg_match('/"whatsapp_draft"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/', $response, $m)) {
+                    $data['whatsapp_draft'] = stripcslashes($m[1]);
+                }
+                if (preg_match('/"sms_draft"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/', $response, $m)) {
+                    $data['sms_draft'] = stripcslashes($m[1]);
+                }
             }
 
-            $emailDraft = $data['email_draft'] ?? '';
-            $whatsappDraft = $data['whatsapp_draft'] ?? '';
-            $smsDraft = $data['sms_draft'] ?? '';
+            if (empty($data) || (!isset($data['email_draft']) && !isset($data['whatsapp_draft']) && !isset($data['sms_draft']) && !isset($data['calls_draft']))) {
+                throw new Exception("Invalid JSON output structure returned by the AI Model. Raw response was: " . substr($response, 0, 500));
+            }
+
+            // Ensure draft values are always strings (never arrays)
+            $emailDraft = is_array($data['email_draft'] ?? '') ? implode("\n", $data['email_draft']) : (string)($data['email_draft'] ?? '');
+            $whatsappDraft = is_array($data['whatsapp_draft'] ?? '') ? implode("\n", $data['whatsapp_draft']) : (string)($data['whatsapp_draft'] ?? '');
+            $smsDraft = is_array($data['sms_draft'] ?? '') ? implode("\n", $data['sms_draft']) : (string)($data['sms_draft'] ?? '');
+            $callsDraft = is_array($data['calls_draft'] ?? '') ? implode("\n", $data['calls_draft']) : (string)($data['calls_draft'] ?? '');
 
             // Save generated drafts to the database
-            $this->db->updateLeadDrafts((int)$leadId, $emailDraft, $whatsappDraft, $smsDraft);
+            $this->db->updateLeadDrafts((int)$leadId, $emailDraft, $whatsappDraft, $smsDraft, $callsDraft);
 
             // Log user activity
             $this->db->logActivity((int)$user['id'], 'GENERATE_AI_OUTREACH', "Generated AI outreach drafts for lead '{$companyName}' (ID: {$leadId})");
@@ -267,7 +297,8 @@ Description/Notes: {$leadDesc}";
             return $this->respondSuccess([
                 'email_draft' => $emailDraft,
                 'whatsapp_draft' => $whatsappDraft,
-                'sms_draft' => $smsDraft
+                'sms_draft' => $smsDraft,
+                'calls_draft' => $callsDraft
             ]);
         } catch (Exception $e) {
             return $this->respondError($e->getMessage(), 500);

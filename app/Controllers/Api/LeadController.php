@@ -75,15 +75,16 @@ class LeadController extends BaseApiController
             $description = trim($input['description'] ?? '');
             $score = trim($input['score'] ?? 'MEDIUM');
             $reasoning = trim($input['reasoning'] ?? 'Manually added');
-            $emailDraft = trim($input['email_draft'] ?? '');
-            $whatsappDraft = trim($input['whatsapp_draft'] ?? '');
-            $smsDraft = trim($input['sms_draft'] ?? '');
+            $emailDraft = trim(is_array($input['email_draft'] ?? '') ? implode("\n", $input['email_draft']) : (string)($input['email_draft'] ?? ''));
+            $whatsappDraft = trim(is_array($input['whatsapp_draft'] ?? '') ? implode("\n", $input['whatsapp_draft']) : (string)($input['whatsapp_draft'] ?? ''));
+            $smsDraft = trim(is_array($input['sms_draft'] ?? '') ? implode("\n", $input['sms_draft']) : (string)($input['sms_draft'] ?? ''));
+            $callsDraft = trim(is_array($input['calls_draft'] ?? '') ? implode("\n", $input['calls_draft']) : (string)($input['calls_draft'] ?? ''));
             $postalAddress = trim($input['postal_address'] ?? '');
 
             $leadId = $this->db->saveLead(
                 $campaignId, $companyName, $contactName, $email, $whatsapp,
                 $industry, $description, $score, $reasoning, $emailDraft,
-                $whatsappDraft, (int)$user['id'], $source, $mobile, $smsDraft, $postalAddress
+                $whatsappDraft, (int)$user['id'], $source, $mobile, $smsDraft, $postalAddress, $callsDraft
             );
 
             $this->db->logActivity((int)$user['id'], 'CREATE_MANUAL_LEAD', "Manually added lead '{$companyName}' (ID: {$leadId})");
@@ -128,10 +129,13 @@ class LeadController extends BaseApiController
             $description = trim($input['description'] ?? '');
             $score = trim($input['score'] ?? 'MEDIUM');
             $reasoning = trim($input['reasoning'] ?? 'Manually added');
-            $emailDraft = trim($input['email_draft'] ?? '');
-            $whatsappDraft = trim($input['whatsapp_draft'] ?? '');
-            $smsDraft = trim($input['sms_draft'] ?? '');
+            $emailDraft = trim(is_array($input['email_draft'] ?? '') ? implode("\n", $input['email_draft']) : (string)($input['email_draft'] ?? ''));
+            $whatsappDraft = trim(is_array($input['whatsapp_draft'] ?? '') ? implode("\n", $input['whatsapp_draft']) : (string)($input['whatsapp_draft'] ?? ''));
+            $smsDraft = trim(is_array($input['sms_draft'] ?? '') ? implode("\n", $input['sms_draft']) : (string)($input['sms_draft'] ?? ''));
+            $callsDraft = trim(is_array($input['calls_draft'] ?? '') ? implode("\n", $input['calls_draft']) : (string)($input['calls_draft'] ?? ''));
             $postalAddress = trim($input['postal_address'] ?? '');
+            // Status from form (manual update)
+            $statusInput = isset($input['status']) && $input['status'] !== '' ? strtoupper(trim($input['status'])) : null;
 
             $newOwnerId = null;
             if ($user['role'] === 'admin' && isset($input['owner_user_id']) && $input['owner_user_id'] !== '') {
@@ -141,7 +145,7 @@ class LeadController extends BaseApiController
             $this->db->updateLead(
                 $leadId, $campaignId, $companyName, $contactName, $email, $whatsapp,
                 $industry, $description, $score, $reasoning, $emailDraft,
-                $whatsappDraft, $source, $mobile, $newOwnerId, $smsDraft, $postalAddress
+                $whatsappDraft, $source, $mobile, $newOwnerId, $smsDraft, $postalAddress, $statusInput, $callsDraft
             );
 
             $this->db->logActivity((int)$user['id'], 'UPDATE_LEAD', "Updated lead '{$companyName}' (ID: {$leadId})");
@@ -151,9 +155,10 @@ class LeadController extends BaseApiController
         // Handle outreach draft manual edits
         if (isset($input['action']) && $input['action'] === 'update_drafts') {
             $leadId = $input['lead_id'] ?? null;
-            $emailDraft = $input['email_draft'] ?? '';
-            $whatsappDraft = $input['whatsapp_draft'] ?? '';
-            $smsDraft = $input['sms_draft'] ?? '';
+            $emailDraft = is_array($input['email_draft'] ?? '') ? implode("\n", $input['email_draft']) : (string)($input['email_draft'] ?? '');
+            $whatsappDraft = is_array($input['whatsapp_draft'] ?? '') ? implode("\n", $input['whatsapp_draft']) : (string)($input['whatsapp_draft'] ?? '');
+            $smsDraft = is_array($input['sms_draft'] ?? '') ? implode("\n", $input['sms_draft']) : (string)($input['sms_draft'] ?? '');
+            $callsDraft = is_array($input['calls_draft'] ?? '') ? implode("\n", $input['calls_draft']) : (string)($input['calls_draft'] ?? '');
 
             if (!$leadId) {
                 return $this->respondError('Missing lead_id');
@@ -174,7 +179,7 @@ class LeadController extends BaseApiController
                 return $this->respondError('Forbidden. Access denied to update drafts.', 403);
             }
 
-            $this->db->updateLeadDrafts((int)$leadId, $emailDraft, $whatsappDraft, $smsDraft);
+            $this->db->updateLeadDrafts((int)$leadId, $emailDraft, $whatsappDraft, $smsDraft, $callsDraft);
             return $this->respondSuccess([], 'Lead outreach drafts updated successfully.');
         }
 
@@ -287,6 +292,10 @@ class LeadController extends BaseApiController
         }
 
         $userDetails = $this->db->getUserById((int)$user['id']);
+        if ($this->isPlanExpired($userDetails)) {
+            $sendSseEvent('error', ['message' => "Plan expired. Your plan expired on {$userDetails['plan_expires_at']}. Please contact an administrator to renew."]);
+            exit;
+        }
         if ($user['role'] !== 'admin' && $userDetails['plan_leads'] !== -1) {
             $leadCount = $this->db->getUserLeadCount((int)$user['id']);
             if ($leadCount >= $userDetails['plan_leads']) {
@@ -364,6 +373,12 @@ class LeadController extends BaseApiController
         $user = $this->getCurrentUser();
         if (!$user) {
             $sendSseEvent('error', ['message' => 'Unauthorized. Please login.']);
+            exit;
+        }
+
+        $userDetails = $this->db->getUserById((int)$user['id']);
+        if ($this->isPlanExpired($userDetails)) {
+            $sendSseEvent('error', ['message' => "Plan expired. Your plan expired on {$userDetails['plan_expires_at']}. Please contact an administrator to renew."]);
             exit;
         }
 

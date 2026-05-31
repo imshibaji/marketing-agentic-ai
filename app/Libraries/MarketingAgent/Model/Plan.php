@@ -18,15 +18,15 @@ class Plan extends BaseModel {
         return $row ?: null;
     }
 
-    public function createPlan(string $name, int $campaignLimit, int $leadLimit, int $llmLimit = 100, int $emailLimit = 100, int $whatsappLimit = 100, int $smsLimit = 100): int {
-        $stmt = $this->pdo->prepare("INSERT INTO plans (name, campaign_limit, lead_limit, llm_limit, email_limit, whatsapp_limit, sms_limit) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit]);
+    public function createPlan(string $name, int $campaignLimit, int $leadLimit, int $llmLimit = 100, int $emailLimit = 100, int $whatsappLimit = 100, int $smsLimit = 100, string $duration = '1 Month'): int {
+        $stmt = $this->pdo->prepare("INSERT INTO plans (name, campaign_limit, lead_limit, llm_limit, email_limit, whatsapp_limit, sms_limit, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit, $duration]);
         return (int)$this->pdo->lastInsertId();
     }
 
-    public function updatePlan(int $id, string $name, int $campaignLimit, int $leadLimit, int $llmLimit = 100, int $emailLimit = 100, int $whatsappLimit = 100, int $smsLimit = 100): void {
-        $stmt = $this->pdo->prepare("UPDATE plans SET name = ?, campaign_limit = ?, lead_limit = ?, llm_limit = ?, email_limit = ?, whatsapp_limit = ?, sms_limit = ? WHERE id = ?");
-        $stmt->execute([$name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit, $id]);
+    public function updatePlan(int $id, string $name, int $campaignLimit, int $leadLimit, int $llmLimit = 100, int $emailLimit = 100, int $whatsappLimit = 100, int $smsLimit = 100, string $duration = '1 Month'): void {
+        $stmt = $this->pdo->prepare("UPDATE plans SET name = ?, campaign_limit = ?, lead_limit = ?, llm_limit = ?, email_limit = ?, whatsapp_limit = ?, sms_limit = ?, duration = ? WHERE id = ?");
+        $stmt->execute([$name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit, $duration, $id]);
     }
 
     public function deletePlan(int $id): void {
@@ -62,6 +62,7 @@ class Plan extends BaseModel {
             email_limit INTEGER NOT NULL DEFAULT 100,
             whatsapp_limit INTEGER NOT NULL DEFAULT 100,
             sms_limit INTEGER NOT NULL DEFAULT 100,
+            duration {$vc} DEFAULT '1 Month',
             created_at {$dt}
         ");
 
@@ -70,6 +71,7 @@ class Plan extends BaseModel {
         $this->schema->addColumnIfNotExists('plans', 'email_limit', 'INTEGER NOT NULL DEFAULT 100');
         $this->schema->addColumnIfNotExists('plans', 'whatsapp_limit', 'INTEGER NOT NULL DEFAULT 100');
         $this->schema->addColumnIfNotExists('plans', 'sms_limit', 'INTEGER NOT NULL DEFAULT 100');
+        $this->schema->addColumnIfNotExists('plans', 'duration', "{$vc} DEFAULT '1 Month'");
 
         // Seed default plan
         $qb = $this->qb();
@@ -81,7 +83,8 @@ class Plan extends BaseModel {
                 'llm_limit' => 100,
                 'email_limit' => 100,
                 'whatsapp_limit' => 100,
-                'sms_limit' => 100
+                'sms_limit' => 100,
+                'duration' => '1 Month'
             ]);
         }
     }

@@ -22,6 +22,7 @@
                         <th style="padding:12px 10px;">Mobile / WhatsApp</th>
                         <th style="padding:12px 10px;">Role</th>
                         <th style="padding:12px 10px;">Plan</th>
+                        <th style="padding:12px 10px;">Plan Expiry</th>
                         <th style="padding:12px 10px;">Campaigns Usage</th>
                         <th style="padding:12px 10px;">Leads Usage</th>
                         <th style="padding:12px 10px;">LLM Usage</th>

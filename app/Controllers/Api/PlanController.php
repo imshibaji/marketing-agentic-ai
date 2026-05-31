@@ -43,17 +43,18 @@ class PlanController extends BaseApiController
         $emailLimit = isset($input['email_limit']) ? (int)$input['email_limit'] : 100;
         $whatsappLimit = isset($input['whatsapp_limit']) ? (int)$input['whatsapp_limit'] : 100;
         $smsLimit = isset($input['sms_limit']) ? (int)$input['sms_limit'] : 100;
+        $duration = trim($input['duration'] ?? '1 Month');
 
         if (empty($name)) {
             return $this->respondError('Plan name is required.');
         }
 
         if ($id) {
-            $this->db->updatePlan((int)$id, $name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit);
+            $this->db->updatePlan((int)$id, $name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit, $duration);
             $this->db->logActivity((int)$user['id'], 'UPDATE_PLAN', "Admin updated plan '{$name}' (ID: {$id})");
             return $this->respondSuccess([], 'Plan updated successfully.');
         } else {
-            $planId = $this->db->createPlan($name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit);
+            $planId = $this->db->createPlan($name, $campaignLimit, $leadLimit, $llmLimit, $emailLimit, $whatsappLimit, $smsLimit, $duration);
             $this->db->logActivity((int)$user['id'], 'CREATE_PLAN', "Admin created plan '{$name}' (ID: {$planId})");
             return $this->respondSuccess(['plan_id' => $planId], 'Plan created successfully.');
         }

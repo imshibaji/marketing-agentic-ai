@@ -1058,6 +1058,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (elements.campaignLanguage) {
                     elements.campaignLanguage.value = 'English';
+                    if (window.updateCampaignLanguage) {
+                        window.updateCampaignLanguage('English');
+                    }
                 }
                 await loadCampaigns();
                 selectCampaign(data.campaign_id);
@@ -2578,7 +2581,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.getElementById('admin-users-tbody');
         if (!tbody) return;
 
-        tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading users...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:20px; color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading users...</td></tr>';
         
         try {
             const res = await fetch('api/users.php');
@@ -2586,7 +2589,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 tbody.innerHTML = '';
                 if (data.users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:var(--text-muted);">No users found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:20px; color:var(--text-muted);">No users found.</td></tr>';
                     return;
                 }
 
@@ -2618,6 +2621,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     const smsLimit = u.sms_limit == -1 ? 'Unlimited' : (u.sms_limit !== undefined ? u.sms_limit : 100);
                     const smsRemaining = u.sms_limit == -1 ? 'unlimited' : `${smsLimit - smsUsage} left`;
 
+                    const expiryText = u.plan_expires_at ? safeParseDate(u.plan_expires_at).toLocaleString() : 'Never';
+                    const isExpired = u.plan_expires_at ? (Date.now() > safeParseDate(u.plan_expires_at).getTime()) : false;
+                    const expiryColor = isExpired ? 'var(--accent-error)' : 'var(--text-primary)';
+                    const expiryWeight = isExpired ? '600' : '400';
+
+                    const hasCrossedLimit = (u.campaign_limit !== -1 && campaignsUsage >= u.campaign_limit) ||
+                                            (u.lead_limit !== -1 && leadsUsage >= u.lead_limit) ||
+                                            (u.llm_limit !== -1 && llmUsage >= u.llm_limit) ||
+                                            (u.email_limit !== -1 && emailUsage >= u.email_limit) ||
+                                            (u.whatsapp_limit !== -1 && whatsappUsage >= u.whatsapp_limit) ||
+                                            (u.sms_limit !== -1 && smsUsage >= u.sms_limit);
+
                     tr.innerHTML = `
                         <td style="padding:12px 10px; font-weight:600;">${escapeHtml(u.username)} ${isSelf ? '<span style="font-size:10px; color:var(--accent-primary); font-weight:400;">(You)</span>' : ''}</td>
                         <td style="padding:12px 10px;">${escapeHtml(u.full_name || '—')}</td>
@@ -2625,6 +2640,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td style="padding:12px 10px;">${escapeHtml(u.mobile || u.whatsapp_number || '—')}</td>
                         <td style="padding:12px 10px;"><span class="user-role-badge role-${u.role.toLowerCase()}">${u.role}</span></td>
                         <td style="padding:12px 10px; font-weight:600; color:var(--accent-primary);">${escapeHtml(u.plan_name || 'Default Plan')}</td>
+                        <td style="padding:12px 10px; color:${expiryColor}; font-weight:${expiryWeight};">${expiryText}</td>
                         <td style="padding:12px 10px;">
                             ${campaignsUsage} / ${campaignsLimit}
                             <br><span style="font-size:10px; color:var(--text-secondary); font-weight:500;">(${campaignsRemaining})</span>
@@ -2651,6 +2667,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         </td>
                         <td style="padding:12px 10px; text-align:right;">
                             <div style="display:inline-flex; gap:6px;">
+                                <button class="user-action-btn reset-plan-btn" data-id="${u.id}" title="Reset/Renew Plan" style="border-color:var(--accent-primary); color:var(--accent-primary);"><i class="fas fa-history"></i></button>
+                                ${hasCrossedLimit ? `<button class="user-action-btn reset-usage-btn" data-id="${u.id}" title="Reset Usage" style="border-color:var(--accent-warning); color:var(--accent-warning);"><i class="fas fa-undo"></i></button>` : ''}
                                 <button class="user-action-btn edit-btn" data-id="${u.id}" title="Edit User"><i class="fas fa-edit"></i></button>
                                 ${isSelf ? '' : `<button class="user-action-btn delete-btn" data-id="${u.id}" title="Delete User"><i class="fas fa-trash-alt"></i></button>`}
                             </div>
@@ -2661,6 +2679,58 @@ document.addEventListener('DOMContentLoaded', () => {
                     tr.querySelector('.edit-btn').addEventListener('click', () => {
                         openEditUserModal(u);
                     });
+
+                    // Bind reset usage listener
+                    const resetBtn = tr.querySelector('.reset-usage-btn');
+                    if (resetBtn) {
+                        resetBtn.addEventListener('click', async () => {
+                            if (confirm(`Are you sure you want to reset all service usage for user '${u.username}'?`)) {
+                                try {
+                                    const res = await fetch('api/reset-usage.php', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ user_id: u.id })
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        showToast('User usage reset successfully.');
+                                        loadUsers();
+                                    } else {
+                                        showToast(data.error || 'Failed to reset usage.', 'error');
+                                    }
+                                } catch (e) {
+                                    console.error(e);
+                                    showToast('Network error while resetting usage.', 'error');
+                                }
+                            }
+                        });
+                    }
+
+                    // Bind reset plan listener
+                    const resetPlanBtn = tr.querySelector('.reset-plan-btn');
+                    if (resetPlanBtn) {
+                        resetPlanBtn.addEventListener('click', async () => {
+                            if (confirm(`Are you sure you want to reset/renew the plan expiration for user '${u.username}'?`)) {
+                                try {
+                                    const res = await fetch('api/reset-plan.php', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ user_id: u.id })
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        showToast('User plan reset/renewed successfully.');
+                                        loadUsers();
+                                    } else {
+                                        showToast(data.error || 'Failed to reset plan.', 'error');
+                                    }
+                                } catch (e) {
+                                    console.error(e);
+                                    showToast('Network error resetting plan.', 'error');
+                                }
+                            }
+                        });
+                    }
 
                     // Bind delete listener if not self
                     const delBtn = tr.querySelector('.delete-btn');
@@ -2673,10 +2743,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     tbody.appendChild(tr);
                 });
             } else {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:20px; color:var(--accent-error);">Failed to load users: ${data.error}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:20px; color:var(--accent-error);">Failed to load users: ${data.error}</td></tr>`;
             }
         } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:20px; color:var(--accent-error);">Network error loading users.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:20px; color:var(--accent-error);">Network error loading users.</td></tr>`;
         }
     }
 
@@ -3091,11 +3161,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const manualLeadSource = document.getElementById('manual-lead-source');
     const manualLeadIndustry = document.getElementById('manual-lead-industry');
     const manualLeadScore = document.getElementById('manual-lead-score');
+    const manualLeadStatus = document.getElementById('manual-lead-status');
     const manualLeadDesc = document.getElementById('manual-lead-desc');
     const manualLeadReasoning = document.getElementById('manual-lead-reasoning');
     const manualLeadError = document.getElementById('manual-lead-error');
     const manualLeadSaveBtn = document.getElementById('manual-lead-save-btn');
     const addManualLeadBtn = document.getElementById('add-manual-lead-btn');
+    // Draft textarea refs
+    const manualLeadEmailDraft = document.getElementById('manual-lead-email-draft');
+    const manualLeadWhatsappDraft = document.getElementById('manual-lead-whatsapp-draft');
+    const manualLeadSmsDraft = document.getElementById('manual-lead-sms-draft');
+    const manualLeadCallsDraft = document.getElementById('manual-lead-calls-draft');
+
+    // Draft tab switching for modal
+    function setupDraftModalTabs() {
+        const tabs = document.querySelectorAll('.draft-modal-tab');
+        const textareas = {
+            email: manualLeadEmailDraft,
+            whatsapp: manualLeadWhatsappDraft,
+            sms: manualLeadSmsDraft,
+            calls: manualLeadCallsDraft
+        };
+        tabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabs.forEach(t => {
+                    t.style.background = 'var(--bg-primary)';
+                    t.style.color = 'var(--text-secondary)';
+                    t.style.borderColor = 'var(--border-color)';
+                });
+                btn.style.background = 'rgba(99,102,241,0.15)';
+                btn.style.color = 'var(--accent-primary)';
+                btn.style.borderColor = 'var(--accent-primary)';
+                const tab = btn.getAttribute('data-tab');
+                Object.values(textareas).forEach(ta => { if (ta) ta.style.display = 'none'; });
+                if (textareas[tab]) textareas[tab].style.display = '';
+            });
+        });
+    }
+    setupDraftModalTabs();
+
+    // Collapsible drafts section toggle
+    const draftsToggle = document.getElementById('manual-lead-drafts-toggle');
+    const draftsBody = document.getElementById('manual-lead-drafts-body');
+    const draftsChevron = document.getElementById('manual-lead-drafts-chevron');
+    let draftsOpen = false;
+    if (draftsToggle && draftsBody) {
+        draftsToggle.addEventListener('click', () => {
+            draftsOpen = !draftsOpen;
+            draftsBody.style.display = draftsOpen ? 'flex' : 'none';
+            if (draftsChevron) draftsChevron.style.transform = draftsOpen ? 'rotate(180deg)' : '';
+        });
+    }
 
     if (addManualLeadBtn) {
         addManualLeadBtn.addEventListener('click', () => {
@@ -3120,8 +3236,13 @@ document.addEventListener('DOMContentLoaded', () => {
             manualLeadSource.value = 'manual';
             manualLeadIndustry.value = '';
             manualLeadScore.value = 'MEDIUM';
+            if (manualLeadStatus) manualLeadStatus.value = '';
             manualLeadDesc.value = '';
             manualLeadReasoning.value = 'Manually added';
+            if (manualLeadEmailDraft) manualLeadEmailDraft.value = '';
+            if (manualLeadWhatsappDraft) manualLeadWhatsappDraft.value = '';
+            if (manualLeadSmsDraft) manualLeadSmsDraft.value = '';
+            if (manualLeadCallsDraft) manualLeadCallsDraft.value = '';
             manualLeadError.style.display = 'none';
             
             manualLeadModal.style.display = 'flex';
@@ -3155,11 +3276,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 source: manualLeadSource.value.trim(),
                 industry: manualLeadIndustry.value.trim(),
                 score: manualLeadScore.value,
+                status: manualLeadStatus ? manualLeadStatus.value : '',
                 description: manualLeadDesc.value.trim(),
                 reasoning: manualLeadReasoning.value.trim(),
-                email_draft: '',
-                whatsapp_draft: '',
-                sms_draft: ''
+                email_draft: manualLeadEmailDraft ? manualLeadEmailDraft.value.trim() : '',
+                whatsapp_draft: manualLeadWhatsappDraft ? manualLeadWhatsappDraft.value.trim() : '',
+                sms_draft: manualLeadSmsDraft ? manualLeadSmsDraft.value.trim() : '',
+                calls_draft: manualLeadCallsDraft ? manualLeadCallsDraft.value.trim() : ''
             };
             if (isEdit) {
                 payload.lead_id = parseInt(elements.manualLeadId.value);
@@ -3270,13 +3393,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const planModalError = document.getElementById('plan-modal-error');
     const planModalSaveBtn = document.getElementById('plan-modal-save-btn');
     const planModalTitle = document.getElementById('plan-modal-title');
+    const planModalDuration = document.getElementById('plan-modal-duration');
 
     async function loadPlans() {
         const tbody = document.getElementById('admin-plans-tbody');
         const select = document.getElementById('edit-user-plan');
         if (!tbody) return;
 
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:15px; color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading plans...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:15px; color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading plans...</td></tr>';
 
         try {
             const res = await fetch('api/plans.php');
@@ -3294,7 +3418,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (data.plans.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:15px; color:var(--text-muted);">No plans found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:15px; color:var(--text-muted);">No plans found.</td></tr>';
                     return;
                 }
 
@@ -3317,6 +3441,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td style="padding:10px;">${emailLimit}</td>
                         <td style="padding:10px;">${whatsappLimit}</td>
                         <td style="padding:10px;">${smsLimit}</td>
+                        <td style="padding:10px; font-weight:600; color:var(--accent-primary);">${escapeHtml(p.duration || '1 Month')}</td>
                         <td style="padding:10px;"><span class="user-role-badge role-user" style="background:rgba(var(--accent-primary-rgb),0.1); color:var(--accent-primary); border:none; padding:2px 8px;">${p.user_count} users</span></td>
                         <td style="padding:10px; text-align:right;">
                             <div style="display:inline-flex; gap:6px;">
@@ -3342,10 +3467,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     tbody.appendChild(tr);
                 });
             } else {
-                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:15px; color:var(--accent-error);">Failed to load plans: ${data.error}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:15px; color:var(--accent-error);">Failed to load plans: ${data.error}</td></tr>`;
             }
         } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:15px; color:var(--accent-error);">Network error loading plans.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:15px; color:var(--accent-error);">Network error loading plans.</td></tr>`;
         }
     }
 
@@ -3361,6 +3486,7 @@ document.addEventListener('DOMContentLoaded', () => {
             planModalEmail.value = '100';
             planModalWhatsapp.value = '100';
             planModalSms.value = '100';
+            if (planModalDuration) planModalDuration.value = '1 Month';
             planModalError.style.display = 'none';
             planModal.style.display = 'flex';
         });
@@ -3376,6 +3502,7 @@ document.addEventListener('DOMContentLoaded', () => {
         planModalEmail.value = plan.email_limit !== undefined ? plan.email_limit : 100;
         planModalWhatsapp.value = plan.whatsapp_limit !== undefined ? plan.whatsapp_limit : 100;
         planModalSms.value = plan.sms_limit !== undefined ? plan.sms_limit : 100;
+        if (planModalDuration) planModalDuration.value = plan.duration || '1 Month';
         planModalError.style.display = 'none';
         planModal.style.display = 'flex';
     }
@@ -3404,7 +3531,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 llm_limit: parseInt(planModalLlm.value),
                 email_limit: parseInt(planModalEmail.value),
                 whatsapp_limit: parseInt(planModalWhatsapp.value),
-                sms_limit: parseInt(planModalSms.value)
+                sms_limit: parseInt(planModalSms.value),
+                duration: planModalDuration ? planModalDuration.value.trim() : '1 Month'
             };
             if (isEdit) {
                 payload.id = parseInt(id);
@@ -3804,10 +3932,19 @@ document.addEventListener('DOMContentLoaded', () => {
             manualLeadSource.value = 'manual';
             manualLeadIndustry.value = '';
             manualLeadScore.value = 'MEDIUM';
+            if (manualLeadStatus) manualLeadStatus.value = '';
             manualLeadDesc.value = '';
             manualLeadReasoning.value = 'Manually added';
             if (manualLeadPostalAddress) manualLeadPostalAddress.value = '';
+            if (manualLeadEmailDraft) manualLeadEmailDraft.value = '';
+            if (manualLeadWhatsappDraft) manualLeadWhatsappDraft.value = '';
+            if (manualLeadSmsDraft) manualLeadSmsDraft.value = '';
+            if (manualLeadCallsDraft) manualLeadCallsDraft.value = '';
             manualLeadError.style.display = 'none';
+            // Collapse drafts section for new contact
+            if (draftsBody) draftsBody.style.display = 'none';
+            if (draftsChevron) draftsChevron.style.transform = '';
+            draftsOpen = false;
 
             // Show owner group only for admins
             const ownerGroup = document.getElementById('manual-lead-owner-group');
@@ -3853,10 +3990,31 @@ document.addEventListener('DOMContentLoaded', () => {
         manualLeadSource.value = contact.source || 'manual';
         manualLeadIndustry.value = contact.industry || '';
         manualLeadScore.value = contact.score || 'MEDIUM';
+        // Populate lead status
+        if (manualLeadStatus) manualLeadStatus.value = contact.status || '';
         manualLeadDesc.value = contact.description || '';
         manualLeadReasoning.value = contact.reasoning || '';
         if (manualLeadPostalAddress) manualLeadPostalAddress.value = contact.postal_address || '';
+        // Populate draft fields
+        if (manualLeadEmailDraft) manualLeadEmailDraft.value = contact.email_draft || '';
+        if (manualLeadWhatsappDraft) manualLeadWhatsappDraft.value = contact.whatsapp_draft || '';
+        if (manualLeadSmsDraft) manualLeadSmsDraft.value = contact.sms_draft || '';
+        if (manualLeadCallsDraft) manualLeadCallsDraft.value = contact.calls_draft || '';
         manualLeadError.style.display = 'none';
+        // Auto-open drafts section if any draft exists
+        const hasDraft = (contact.email_draft || contact.whatsapp_draft || contact.sms_draft || contact.calls_draft);
+        if (hasDraft && draftsBody) {
+            draftsOpen = true;
+            draftsBody.style.display = 'flex';
+            if (draftsChevron) draftsChevron.style.transform = 'rotate(180deg)';
+            // Reset to email tab
+            const emailTab = document.getElementById('modal-draft-tab-email');
+            if (emailTab) emailTab.click();
+        } else if (draftsBody) {
+            draftsOpen = false;
+            draftsBody.style.display = 'none';
+            if (draftsChevron) draftsChevron.style.transform = '';
+        }
 
         // Show owner group for admins only and populate dropdown
         const ownerGroup = document.getElementById('manual-lead-owner-group');
@@ -4037,6 +4195,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (data.success) {
                 if (planBadge) planBadge.textContent = 'Plan: ' + data.plan_name;
+                
+                const expirySpan = document.getElementById('dashboard-plan-expiry');
+                if (expirySpan) {
+                    if (data.plan_expires_at) {
+                        const date = safeParseDate(data.plan_expires_at);
+                        expirySpan.textContent = 'Expires: ' + date.toLocaleString();
+                        expirySpan.style.display = 'inline-block';
+                        if (Date.now() > date.getTime()) {
+                            expirySpan.style.background = 'rgba(239,68,68,0.15)';
+                            expirySpan.style.color = 'var(--accent-error)';
+                            expirySpan.style.borderColor = 'rgba(239,68,68,0.3)';
+                            expirySpan.textContent = 'Plan Expired: ' + date.toLocaleString();
+                        } else {
+                            expirySpan.style.background = 'rgba(245,158,11,0.15)';
+                            expirySpan.style.color = '#F59E0B';
+                            expirySpan.style.borderColor = 'rgba(245,158,11,0.3)';
+                        }
+                    } else {
+                        expirySpan.style.display = 'none';
+                    }
+                }
                 
                 container.innerHTML = '';
                 const items = [
@@ -4333,8 +4512,273 @@ document.addEventListener('DOMContentLoaded', () => {
     const outreachChannelBtns = {
         email: document.getElementById('outreach-pane-tab-email'),
         whatsapp: document.getElementById('outreach-pane-tab-whatsapp'),
-        sms: document.getElementById('outreach-pane-tab-sms')
+        sms: document.getElementById('outreach-pane-tab-sms'),
+        calls: document.getElementById('outreach-pane-tab-calls')
     };
+
+    // -------------------------------------------------------
+    // LANGUAGE PICKER — All Google Gemma 4 supported languages
+    // -------------------------------------------------------
+    const GEMMA_LANGUAGES = [
+        { code: 'af', name: 'Afrikaans' },
+        { code: 'sq', name: 'Albanian' },
+        { code: 'am', name: 'Amharic' },
+        { code: 'ar', name: 'Arabic' },
+        { code: 'hy', name: 'Armenian' },
+        { code: 'as', name: 'Assamese' },
+        { code: 'az', name: 'Azerbaijani' },
+        { code: 'eu', name: 'Basque' },
+        { code: 'be', name: 'Belarusian' },
+        { code: 'bn', name: 'Bengali' },
+        { code: 'bs', name: 'Bosnian' },
+        { code: 'bg', name: 'Bulgarian' },
+        { code: 'ca', name: 'Catalan' },
+        { code: 'ceb', name: 'Cebuano' },
+        { code: 'zh-CN', name: 'Chinese (Simplified)' },
+        { code: 'zh-TW', name: 'Chinese (Traditional)' },
+        { code: 'hr', name: 'Croatian' },
+        { code: 'cs', name: 'Czech' },
+        { code: 'da', name: 'Danish' },
+        { code: 'nl', name: 'Dutch' },
+        { code: 'en', name: 'English' },
+        { code: 'eo', name: 'Esperanto' },
+        { code: 'et', name: 'Estonian' },
+        { code: 'fi', name: 'Finnish' },
+        { code: 'fr', name: 'French' },
+        { code: 'gl', name: 'Galician' },
+        { code: 'ka', name: 'Georgian' },
+        { code: 'de', name: 'German' },
+        { code: 'el', name: 'Greek' },
+        { code: 'gu', name: 'Gujarati' },
+        { code: 'ht', name: 'Haitian Creole' },
+        { code: 'ha', name: 'Hausa' },
+        { code: 'he', name: 'Hebrew' },
+        { code: 'hi', name: 'Hindi' },
+        { code: 'hu', name: 'Hungarian' },
+        { code: 'is', name: 'Icelandic' },
+        { code: 'ig', name: 'Igbo' },
+        { code: 'id', name: 'Indonesian' },
+        { code: 'ga', name: 'Irish' },
+        { code: 'it', name: 'Italian' },
+        { code: 'ja', name: 'Japanese' },
+        { code: 'jv', name: 'Javanese' },
+        { code: 'kn', name: 'Kannada' },
+        { code: 'kk', name: 'Kazakh' },
+        { code: 'km', name: 'Khmer' },
+        { code: 'ko', name: 'Korean' },
+        { code: 'ku', name: 'Kurdish' },
+        { code: 'ky', name: 'Kyrgyz' },
+        { code: 'lo', name: 'Lao' },
+        { code: 'lv', name: 'Latvian' },
+        { code: 'lt', name: 'Lithuanian' },
+        { code: 'lb', name: 'Luxembourgish' },
+        { code: 'mk', name: 'Macedonian' },
+        { code: 'mg', name: 'Malagasy' },
+        { code: 'ms', name: 'Malay' },
+        { code: 'ml', name: 'Malayalam' },
+        { code: 'mt', name: 'Maltese' },
+        { code: 'mi', name: 'Maori' },
+        { code: 'mr', name: 'Marathi' },
+        { code: 'mn', name: 'Mongolian' },
+        { code: 'my', name: 'Myanmar (Burmese)' },
+        { code: 'ne', name: 'Nepali' },
+        { code: 'no', name: 'Norwegian' },
+        { code: 'or', name: 'Odia (Oriya)' },
+        { code: 'ps', name: 'Pashto' },
+        { code: 'fa', name: 'Persian' },
+        { code: 'pl', name: 'Polish' },
+        { code: 'pt', name: 'Portuguese' },
+        { code: 'pa', name: 'Punjabi' },
+        { code: 'ro', name: 'Romanian' },
+        { code: 'ru', name: 'Russian' },
+        { code: 'sm', name: 'Samoan' },
+        { code: 'sr', name: 'Serbian' },
+        { code: 'sn', name: 'Shona' },
+        { code: 'sd', name: 'Sindhi' },
+        { code: 'si', name: 'Sinhala' },
+        { code: 'sk', name: 'Slovak' },
+        { code: 'sl', name: 'Slovenian' },
+        { code: 'so', name: 'Somali' },
+        { code: 'es', name: 'Spanish' },
+        { code: 'su', name: 'Sundanese' },
+        { code: 'sw', name: 'Swahili' },
+        { code: 'sv', name: 'Swedish' },
+        { code: 'tl', name: 'Tagalog (Filipino)' },
+        { code: 'tg', name: 'Tajik' },
+        { code: 'ta', name: 'Tamil' },
+        { code: 'tt', name: 'Tatar' },
+        { code: 'te', name: 'Telugu' },
+        { code: 'th', name: 'Thai' },
+        { code: 'tr', name: 'Turkish' },
+        { code: 'tk', name: 'Turkmen' },
+        { code: 'uk', name: 'Ukrainian' },
+        { code: 'ur', name: 'Urdu' },
+        { code: 'ug', name: 'Uyghur' },
+        { code: 'uz', name: 'Uzbek' },
+        { code: 'vi', name: 'Vietnamese' },
+        { code: 'cy', name: 'Welsh' },
+        { code: 'xh', name: 'Xhosa' },
+        { code: 'yi', name: 'Yiddish' },
+        { code: 'yo', name: 'Yoruba' },
+        { code: 'zu', name: 'Zulu' }
+    ];
+
+    (function initLanguagePicker() {
+        const display = document.getElementById('outreach-language-display');
+        const label   = document.getElementById('outreach-language-label');
+        const hidden  = document.getElementById('outreach-language-value');
+        const dropdown= document.getElementById('outreach-language-dropdown');
+        const search  = document.getElementById('outreach-language-search');
+        const list    = document.getElementById('outreach-language-list');
+        const chevron = document.getElementById('outreach-language-chevron');
+        if (!display || !dropdown || !list) return;
+
+        let isOpen = false;
+
+        function renderList(filter) {
+            list.innerHTML = '';
+            const q = (filter || '').toLowerCase();
+            const matched = GEMMA_LANGUAGES.filter(l => l.name.toLowerCase().includes(q) || l.code.toLowerCase().includes(q));
+            if (!matched.length) {
+                list.innerHTML = '<div style="padding:10px; font-size:12px; color:var(--text-muted); text-align:center;">No languages found</div>';
+                return;
+            }
+            matched.forEach(lang => {
+                const item = document.createElement('div');
+                item.style.cssText = 'padding:7px 10px; border-radius:5px; cursor:pointer; font-size:12px; color:var(--text-primary); transition:background 0.15s; display:flex; align-items:center; gap:8px;';
+                item.setAttribute('data-lang-name', lang.name);
+                const isSelected = hidden.value === lang.name;
+                if (isSelected) {
+                    item.style.background = 'rgba(99,102,241,0.15)';
+                    item.style.color = 'var(--accent-primary)';
+                    item.style.fontWeight = '600';
+                }
+                item.innerHTML = `<span style="font-size:10px; background:var(--bg-primary); border:1px solid var(--border-color); padding:1px 5px; border-radius:3px; font-family:monospace; color:var(--text-muted); flex-shrink:0;">${lang.code}</span><span>${lang.name}</span>`;
+                item.addEventListener('mouseenter', () => { if (hidden.value !== lang.name) item.style.background = 'var(--bg-primary)'; });
+                item.addEventListener('mouseleave', () => { if (hidden.value !== lang.name) item.style.background = ''; });
+                item.addEventListener('click', () => {
+                    hidden.value = lang.name;
+                    label.innerHTML = `<i class="fas fa-flag" style="margin-right:5px; opacity:0.6;"></i>${lang.name}`;
+                    closeDropdown();
+                });
+                list.appendChild(item);
+            });
+        }
+
+        function openDropdown() {
+            isOpen = true;
+            dropdown.style.display = 'flex';
+            chevron.style.transform = 'rotate(180deg)';
+            display.style.borderColor = 'var(--accent-primary)';
+            renderList('');
+            setTimeout(() => { if (search) { search.value = ''; search.focus(); } }, 50);
+        }
+
+        function closeDropdown() {
+            isOpen = false;
+            dropdown.style.display = 'none';
+            chevron.style.transform = '';
+            display.style.borderColor = '';
+        }
+
+        display.addEventListener('click', (e) => { e.stopPropagation(); isOpen ? closeDropdown() : openDropdown(); });
+
+        if (search) {
+            search.addEventListener('input', () => renderList(search.value));
+            search.addEventListener('keydown', e => { if (e.key === 'Escape') closeDropdown(); });
+        }
+
+        document.addEventListener('click', (e) => {
+            if (isOpen && !document.getElementById('outreach-language-picker').contains(e.target)) {
+                closeDropdown();
+            }
+        });
+
+        // Init list
+        renderList('');
+    })();
+
+    (function initCampaignLanguagePicker() {
+        const display = document.getElementById('campaign-language-display');
+        const label   = document.getElementById('campaign-language-label');
+        const hidden  = document.getElementById('campaign_language');
+        const dropdown= document.getElementById('campaign-language-dropdown');
+        const search  = document.getElementById('campaign-language-search');
+        const list    = document.getElementById('campaign-language-list');
+        const chevron = document.getElementById('campaign-language-chevron');
+        if (!display || !dropdown || !list) return;
+
+        let isOpen = false;
+
+        function renderList(filter) {
+            list.innerHTML = '';
+            const q = (filter || '').toLowerCase();
+            const matched = GEMMA_LANGUAGES.filter(l => l.name.toLowerCase().includes(q) || l.code.toLowerCase().includes(q));
+            if (!matched.length) {
+                list.innerHTML = '<div style="padding:10px; font-size:12px; color:var(--text-muted); text-align:center;">No languages found</div>';
+                return;
+            }
+            matched.forEach(lang => {
+                const item = document.createElement('div');
+                item.style.cssText = 'padding:7px 10px; border-radius:5px; cursor:pointer; font-size:12px; color:var(--text-primary); transition:background 0.15s; display:flex; align-items:center; gap:8px;';
+                item.setAttribute('data-lang-name', lang.name);
+                const isSelected = hidden.value === lang.name;
+                if (isSelected) {
+                    item.style.background = 'rgba(99,102,241,0.15)';
+                    item.style.color = 'var(--accent-primary)';
+                    item.style.fontWeight = '600';
+                }
+                item.innerHTML = `<span style="font-size:10px; background:var(--bg-primary); border:1px solid var(--border-color); padding:1px 5px; border-radius:3px; font-family:monospace; color:var(--text-muted); flex-shrink:0;">${lang.code}</span><span>${lang.name}</span>`;
+                item.addEventListener('mouseenter', () => { if (hidden.value !== lang.name) item.style.background = 'var(--bg-primary)'; });
+                item.addEventListener('mouseleave', () => { if (hidden.value !== lang.name) item.style.background = ''; });
+                item.addEventListener('click', () => {
+                    hidden.value = lang.name;
+                    label.innerHTML = `<i class="fas fa-flag" style="margin-right:5px; opacity:0.6;"></i>${lang.name}`;
+                    hidden.dispatchEvent(new Event('change'));
+                    closeDropdown();
+                });
+                list.appendChild(item);
+            });
+        }
+
+        function openDropdown() {
+            isOpen = true;
+            dropdown.style.display = 'flex';
+            chevron.style.transform = 'rotate(180deg)';
+            display.style.borderColor = 'var(--accent-primary)';
+            renderList('');
+            setTimeout(() => { if (search) { search.value = ''; search.focus(); } }, 50);
+        }
+
+        function closeDropdown() {
+            isOpen = false;
+            dropdown.style.display = 'none';
+            chevron.style.transform = '';
+            display.style.borderColor = '';
+        }
+
+        display.addEventListener('click', (e) => { e.stopPropagation(); isOpen ? closeDropdown() : openDropdown(); });
+
+        if (search) {
+            search.addEventListener('input', () => renderList(search.value));
+            search.addEventListener('keydown', e => { if (e.key === 'Escape') closeDropdown(); });
+        }
+
+        document.addEventListener('click', (e) => {
+            if (isOpen && !document.getElementById('campaign-language-picker').contains(e.target)) {
+                closeDropdown();
+            }
+        });
+
+        window.updateCampaignLanguage = function(val) {
+            hidden.value = val;
+            label.innerHTML = `<i class="fas fa-flag" style="margin-right:5px; opacity:0.6;"></i>${val}`;
+        };
+
+        // Init list
+        renderList('');
+    })();
+
 
     // Load campaign select dropdown options and contacts
     async function loadOutreachTab() {
@@ -4422,12 +4866,16 @@ document.addEventListener('DOMContentLoaded', () => {
             card.setAttribute('data-id', lead.id);
 
             const scoreClass = `score-${(lead.score || 'MEDIUM').toLowerCase()}`;
-            let leadStatus = (lead.status || 'GENERATED').toUpperCase();
-            if (leadStatus === 'GENERATED') leadStatus = 'QUALIFIED';
+            const leadStatus = (lead.status || 'GENERATED').toUpperCase();
 
             let statusClass = 'created';
-            if (leadStatus === 'OUTREACHED') statusClass = 'running';
-            if (leadStatus === 'CLOSED') statusClass = 'completed';
+            if (leadStatus === 'GENERATED') statusClass = 'created';
+            else if (leadStatus === 'QUALIFIED') statusClass = 'running';
+            else if (leadStatus === 'OUTREACHED') statusClass = 'running';
+            else if (leadStatus === 'CLOSED') statusClass = 'completed';
+            else if (leadStatus === 'LOST') statusClass = 'failed';
+
+            const hasDrafts = !!(lead.email_draft || lead.whatsapp_draft || lead.sms_draft || lead.calls_draft);
 
             card.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
@@ -4435,9 +4883,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="lead-score-badge ${scoreClass}" style="flex-shrink:0;">${lead.score || 'MEDIUM'}</span>
                 </div>
                 <div style="font-size:11px; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center;">
-                    <span>Contact: ${escapeHtml(lead.contact_name)}</span>
-                    <span class="campaign-badge badge-${statusClass}" style="font-size:9px; padding:1px 4px;">${leadStatus.toLowerCase()}</span>
+                    <span>${escapeHtml(lead.contact_name || 'No contact')}</span>
+                    <span class="campaign-badge badge-${statusClass}" style="font-size:9px; padding:1px 4px;">${leadStatus}</span>
                 </div>
+                ${hasDrafts ? `<div style="font-size:10px; color:var(--accent-primary); margin-top:2px;"><i class="fas fa-check-circle"></i> Drafts ready</div>` : ''}
             `;
 
             card.addEventListener('click', () => {
@@ -4505,6 +4954,37 @@ document.addEventListener('DOMContentLoaded', () => {
             scoreBadge.className = 'lead-score-badge score-' + (lead.score || 'MEDIUM').toLowerCase();
         }
 
+        // Populate & wire status dropdown
+        const statusSel = document.getElementById('outreach-lead-status-select');
+        if (statusSel) {
+            statusSel.value = lead.status || 'GENERATED';
+            // Remove old listener by cloning
+            const newStatusSel = statusSel.cloneNode(true);
+            statusSel.parentNode.replaceChild(newStatusSel, statusSel);
+            newStatusSel.value = lead.status || 'GENERATED';
+            newStatusSel.addEventListener('change', async () => {
+                const newStatus = newStatusSel.value;
+                try {
+                    const res = await fetch('api/leads.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ lead_id: lead.id, status: newStatus })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        lead.status = newStatus;
+                        const found = state.outreachLeads.find(l => l.id == lead.id);
+                        if (found) found.status = newStatus;
+                        showToast(`Lead status updated to ${newStatus}`);
+                    } else {
+                        showToast('Failed to update status: ' + (data.error || ''));
+                    }
+                } catch (err) {
+                    showToast('Error updating status.');
+                }
+            });
+        }
+
         const descContainer = document.getElementById('outreach-contact-desc-container');
         const descEl = document.getElementById('outreach-contact-desc');
         if (descContainer && descEl) {
@@ -4530,6 +5010,8 @@ document.addEventListener('DOMContentLoaded', () => {
             outreachTextarea.value = lead.whatsapp_draft || '';
         } else if (state.activeOutreachChannel === 'sms') {
             outreachTextarea.value = lead.sms_draft || '';
+        } else if (state.activeOutreachChannel === 'calls') {
+            outreachTextarea.value = lead.calls_draft || '';
         }
     }
 
@@ -4543,6 +5025,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 lead.whatsapp_draft = outreachTextarea.value;
             } else if (state.activeOutreachChannel === 'sms') {
                 lead.sms_draft = outreachTextarea.value;
+            } else if (state.activeOutreachChannel === 'calls') {
+                lead.calls_draft = outreachTextarea.value;
             }
             const found = state.outreachLeads.find(l => l.id == lead.id);
             if (found) {
@@ -4565,6 +5049,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (outreachChannelBtns.email) outreachChannelBtns.email.addEventListener('click', () => selectOutreachChannel('email'));
     if (outreachChannelBtns.whatsapp) outreachChannelBtns.whatsapp.addEventListener('click', () => selectOutreachChannel('whatsapp'));
     if (outreachChannelBtns.sms) outreachChannelBtns.sms.addEventListener('click', () => selectOutreachChannel('sms'));
+    if (outreachChannelBtns.calls) outreachChannelBtns.calls.addEventListener('click', () => selectOutreachChannel('calls'));
 
     // Outreach Generate AI Button
     if (outreachGenerateBtn) {
@@ -4579,19 +5064,23 @@ document.addEventListener('DOMContentLoaded', () => {
             outreachGenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
 
             try {
+                const selectedLanguage = document.getElementById('outreach-language-value');
                 const res = await fetch('api/generate-outreach.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         lead_id: lead.id,
-                        llm_provider: provider
+                        llm_provider: provider,
+                        language: selectedLanguage ? selectedLanguage.value : 'English'
                     })
                 });
                 const data = await res.json();
                 if (data.success) {
+                    // Update local state immediately for instant UI response
                     lead.email_draft = data.email_draft;
                     lead.whatsapp_draft = data.whatsapp_draft;
                     lead.sms_draft = data.sms_draft;
+                    lead.calls_draft = data.calls_draft;
 
                     // Sync list array
                     const found = state.outreachLeads.find(l => l.id == lead.id);
@@ -4599,10 +5088,37 @@ document.addEventListener('DOMContentLoaded', () => {
                         found.email_draft = data.email_draft;
                         found.whatsapp_draft = data.whatsapp_draft;
                         found.sms_draft = data.sms_draft;
+                        found.calls_draft = data.calls_draft;
                     }
 
+                    // Render updated draft content immediately
                     renderOutreachChannelText();
-                    showToast('AI Outreach drafts generated successfully.');
+                    showToast('AI Outreach drafts generated successfully! Refreshing contacts...');
+
+                    // Re-fetch leads from server to confirm data saved correctly
+                    const campaignId = outreachCampaignSelect ? outreachCampaignSelect.value : null;
+                    if (campaignId) {
+                        try {
+                            const refreshRes = await fetch(`api/leads.php?campaign_id=${campaignId}`);
+                            const refreshData = await refreshRes.json();
+                            if (refreshData.success) {
+                                state.outreachLeads = refreshData.leads;
+                                // Update active lead reference with fresh server data
+                                const freshLead = refreshData.leads.find(l => l.id == lead.id);
+                                if (freshLead) {
+                                    state.activeOutreachLead = freshLead;
+                                }
+                                renderOutreachLeadsList();
+                                renderOutreachChannelText();
+                                showToast('AI Outreach drafts generated and saved successfully!');
+                            }
+                        } catch (refreshErr) {
+                            console.warn('Could not refresh contacts after generation:', refreshErr);
+                            showToast('Drafts generated — refresh the page to see all changes.');
+                        }
+                    } else {
+                        showToast('AI Outreach drafts generated successfully!');
+                    }
                 } else {
                     alert('Error generating outreach: ' + (data.error || 'Unknown error'));
                 }
@@ -4635,7 +5151,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         lead_id: lead.id,
                         email_draft: lead.email_draft || '',
                         whatsapp_draft: lead.whatsapp_draft || '',
-                        sms_draft: lead.sms_draft || ''
+                        sms_draft: lead.sms_draft || '',
+                        calls_draft: lead.calls_draft || ''
                     })
                 });
                 const data = await res.json();
@@ -4697,7 +5214,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         lead_id: lead.id,
                         email_draft: lead.email_draft || '',
                         whatsapp_draft: lead.whatsapp_draft || '',
-                        sms_draft: lead.sms_draft || ''
+                        sms_draft: lead.sms_draft || '',
+                        calls_draft: lead.calls_draft || ''
                     })
                 });
                 const saveData = await saveRes.json();

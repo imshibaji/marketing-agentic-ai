@@ -23,6 +23,7 @@
                         <th style="padding:12px 10px;">Email Limit</th>
                         <th style="padding:12px 10px;">WhatsApp Limit</th>
                         <th style="padding:12px 10px;">SMS Limit</th>
+                        <th style="padding:12px 10px;">Duration</th>
                         <th style="padding:12px 10px;">Active Users</th>
                         <th style="padding:12px 10px; text-align:right;">Actions</th>
                     </tr>
@@ -48,6 +49,11 @@
             <div class="form-group">
                 <label for="plan-modal-name"><i class="fas fa-signature"></i> Plan Name *</label>
                 <input type="text" id="plan-modal-name" required placeholder="e.g. Premium Tier">
+            </div>
+
+            <div class="form-group">
+                <label for="plan-modal-duration"><i class="fas fa-hourglass-half"></i> Plan Expiry / Duration *</label>
+                <input type="text" id="plan-modal-duration" required placeholder="e.g. 1 Month, 30 Days, 1 Year, 23 Hours" value="1 Month">
             </div>
 
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">

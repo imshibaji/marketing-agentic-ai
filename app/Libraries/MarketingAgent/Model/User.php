@@ -6,9 +6,9 @@ class User extends BaseModel {
 
     public function getUsers(): array {
         $stmt = $this->pdo->query(
-            "SELECT u.id, u.username, u.role, u.created_at, u.full_name, u.email, u.mobile, u.whatsapp_number, u.plan_id,
+            "SELECT u.id, u.username, u.role, u.created_at, u.full_name, u.email, u.mobile, u.whatsapp_number, u.plan_id, u.plan_expires_at,
                     u.llm_usage, u.email_usage, u.whatsapp_usage, u.sms_usage,
-                    p.name AS plan_name, p.campaign_limit, p.lead_limit, p.llm_limit, p.email_limit, p.whatsapp_limit, p.sms_limit,
+                    p.name AS plan_name, p.campaign_limit, p.lead_limit, p.llm_limit, p.email_limit, p.whatsapp_limit, p.sms_limit, p.duration AS plan_duration,
                     (SELECT COUNT(*) FROM campaigns c WHERE c.user_id = u.id) AS campaign_usage,
                     (SELECT COUNT(*) FROM leads l LEFT JOIN campaigns c ON l.campaign_id = c.id WHERE l.user_id = u.id OR c.user_id = u.id) AS lead_usage
              FROM users u
@@ -20,10 +20,10 @@ class User extends BaseModel {
 
     public function getUserById(int $id): ?array {
         $stmt = $this->pdo->prepare(
-            "SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.full_name, u.email, u.mobile, u.whatsapp_number, u.plan_id,
+            "SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.full_name, u.email, u.mobile, u.whatsapp_number, u.plan_id, u.plan_expires_at,
                     u.llm_usage, u.email_usage, u.whatsapp_usage, u.sms_usage,
                     p.name AS plan_name, p.campaign_limit AS plan_campaigns, p.lead_limit AS plan_leads,
-                    p.llm_limit AS plan_llm, p.email_limit AS plan_email, p.whatsapp_limit AS plan_whatsapp, p.sms_limit AS plan_sms
+                    p.llm_limit AS plan_llm, p.email_limit AS plan_email, p.whatsapp_limit AS plan_whatsapp, p.sms_limit AS plan_sms, p.duration AS plan_duration
              FROM users u
              LEFT JOIN plans p ON u.plan_id = p.id
              WHERE u.id = ?"
@@ -35,10 +35,10 @@ class User extends BaseModel {
 
     public function getUserByUsername(string $username): ?array {
         $stmt = $this->pdo->prepare(
-            "SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.full_name, u.email, u.mobile, u.whatsapp_number, u.plan_id,
+            "SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.full_name, u.email, u.mobile, u.whatsapp_number, u.plan_id, u.plan_expires_at,
                     u.llm_usage, u.email_usage, u.whatsapp_usage, u.sms_usage,
                     p.name AS plan_name, p.campaign_limit AS plan_campaigns, p.lead_limit AS plan_leads,
-                    p.llm_limit AS plan_llm, p.email_limit AS plan_email, p.whatsapp_limit AS plan_whatsapp, p.sms_limit AS plan_sms
+                    p.llm_limit AS plan_llm, p.email_limit AS plan_email, p.whatsapp_limit AS plan_whatsapp, p.sms_limit AS plan_sms, p.duration AS plan_duration
              FROM users u
              LEFT JOIN plans p ON u.plan_id = p.id
              WHERE u.username = ?"
@@ -50,10 +50,10 @@ class User extends BaseModel {
 
     public function getUserByEmail(string $email): ?array {
         $stmt = $this->pdo->prepare(
-            "SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.full_name, u.email, u.mobile, u.whatsapp_number, u.plan_id,
+            "SELECT u.id, u.username, u.password_hash, u.role, u.created_at, u.full_name, u.email, u.mobile, u.whatsapp_number, u.plan_id, u.plan_expires_at,
                     u.llm_usage, u.email_usage, u.whatsapp_usage, u.sms_usage,
                     p.name AS plan_name, p.campaign_limit AS plan_campaigns, p.lead_limit AS plan_leads,
-                    p.llm_limit AS plan_llm, p.email_limit AS plan_email, p.whatsapp_limit AS plan_whatsapp, p.sms_limit AS plan_sms
+                    p.llm_limit AS plan_llm, p.email_limit AS plan_email, p.whatsapp_limit AS plan_whatsapp, p.sms_limit AS plan_sms, p.duration AS plan_duration
              FROM users u
              LEFT JOIN plans p ON u.plan_id = p.id
              WHERE u.email = ?"
@@ -68,10 +68,21 @@ class User extends BaseModel {
             $stmt = $this->pdo->query("SELECT id FROM plans WHERE name = 'Default Plan' LIMIT 1");
             $planId = (int)$stmt->fetchColumn() ?: null;
         }
+
+        $planExpiresAt = null;
+        if ($planId) {
+            $stmtPlan = $this->pdo->prepare("SELECT duration FROM plans WHERE id = ?");
+            $stmtPlan->execute([$planId]);
+            $dur = $stmtPlan->fetchColumn() ?: '1 Month';
+            $dur = trim($dur);
+            $ts = (stripos($dur, '+') !== 0 && stripos($dur, '-') !== 0) ? strtotime('+' . $dur) : strtotime($dur);
+            $planExpiresAt = ($ts !== false) ? date('Y-m-d H:i:s', $ts) : date('Y-m-d H:i:s', strtotime('+1 Month'));
+        }
+
         $stmt = $this->pdo->prepare(
-            "INSERT INTO users (username, password_hash, role, full_name, email, mobile, whatsapp_number, plan_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO users (username, password_hash, role, full_name, email, mobile, whatsapp_number, plan_id, plan_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
-        $stmt->execute([$username, $passwordHash, $role, $fullName, $email, $mobile, $whatsappNumber, $planId]);
+        $stmt->execute([$username, $passwordHash, $role, $fullName, $email, $mobile, $whatsappNumber, $planId, $planExpiresAt]);
         return (int)$this->pdo->lastInsertId();
     }
 
@@ -80,10 +91,31 @@ class User extends BaseModel {
             $stmt = $this->pdo->query("SELECT id FROM plans WHERE name = 'Default Plan' LIMIT 1");
             $planId = (int)$stmt->fetchColumn() ?: null;
         }
+
+        // Check if plan_id is changing
+        $stmtCurr = $this->pdo->prepare("SELECT plan_id, plan_expires_at FROM users WHERE id = ?");
+        $stmtCurr->execute([$id]);
+        $curr = $stmtCurr->fetch();
+        $currPlanId = $curr ? (int)$curr['plan_id'] : null;
+        $planExpiresAt = $curr ? $curr['plan_expires_at'] : null;
+
+        if ($currPlanId !== $planId || $planExpiresAt === null) {
+            if ($planId) {
+                $stmtPlan = $this->pdo->prepare("SELECT duration FROM plans WHERE id = ?");
+                $stmtPlan->execute([$planId]);
+                $dur = $stmtPlan->fetchColumn() ?: '1 Month';
+                $dur = trim($dur);
+                $ts = (stripos($dur, '+') !== 0 && stripos($dur, '-') !== 0) ? strtotime('+' . $dur) : strtotime($dur);
+                $planExpiresAt = ($ts !== false) ? date('Y-m-d H:i:s', $ts) : date('Y-m-d H:i:s', strtotime('+1 Month'));
+            } else {
+                $planExpiresAt = null;
+            }
+        }
+
         $stmt = $this->pdo->prepare(
-            "UPDATE users SET username = ?, password_hash = ?, role = ?, full_name = ?, email = ?, mobile = ?, whatsapp_number = ?, plan_id = ? WHERE id = ?"
+            "UPDATE users SET username = ?, password_hash = ?, role = ?, full_name = ?, email = ?, mobile = ?, whatsapp_number = ?, plan_id = ?, plan_expires_at = ? WHERE id = ?"
         );
-        $stmt->execute([$username, $passwordHash, $role, $fullName, $email, $mobile, $whatsappNumber, $planId, $id]);
+        $stmt->execute([$username, $passwordHash, $role, $fullName, $email, $mobile, $whatsappNumber, $planId, $planExpiresAt, $id]);
     }
 
     public function deleteUser(int $id): void {
@@ -130,6 +162,30 @@ class User extends BaseModel {
         $stmt->execute([$userId]);
     }
 
+    public function resetUserUsage(int $userId): void {
+        $stmt = $this->pdo->prepare("UPDATE users SET llm_usage = 0, email_usage = 0, whatsapp_usage = 0, sms_usage = 0 WHERE id = ?");
+        $stmt->execute([$userId]);
+    }
+
+    public function resetUserPlan(int $userId): void {
+        $stmt = $this->pdo->prepare("SELECT plan_id FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $planId = $stmt->fetchColumn();
+
+        $planExpiresAt = null;
+        if ($planId) {
+            $stmtPlan = $this->pdo->prepare("SELECT duration FROM plans WHERE id = ?");
+            $stmtPlan->execute([$planId]);
+            $dur = $stmtPlan->fetchColumn() ?: '1 Month';
+            $dur = trim($dur);
+            $ts = (stripos($dur, '+') !== 0 && stripos($dur, '-') !== 0) ? strtotime('+' . $dur) : strtotime($dur);
+            $planExpiresAt = ($ts !== false) ? date('Y-m-d H:i:s', $ts) : date('Y-m-d H:i:s', strtotime('+1 Month'));
+        }
+
+        $stmtUpdate = $this->pdo->prepare("UPDATE users SET plan_expires_at = ? WHERE id = ?");
+        $stmtUpdate->execute([$planExpiresAt, $userId]);
+    }
+
     public function initializeSchema(): void {
         $pk = $this->schema->primaryKeyDdl();
         $vc = $this->schema->varcharDdl(255);
@@ -155,5 +211,25 @@ class User extends BaseModel {
         $this->schema->addColumnIfNotExists('users', 'email_usage', 'INTEGER NOT NULL DEFAULT 0');
         $this->schema->addColumnIfNotExists('users', 'whatsapp_usage', 'INTEGER NOT NULL DEFAULT 0');
         $this->schema->addColumnIfNotExists('users', 'sms_usage', 'INTEGER NOT NULL DEFAULT 0');
+        $this->schema->addColumnIfNotExists('users', 'plan_expires_at', 'DATETIME');
+
+        // Seed default plan_expires_at for existing users if NULL
+        try {
+            $stmt = $this->pdo->query("SELECT id, plan_id FROM users WHERE plan_expires_at IS NULL AND plan_id IS NOT NULL");
+            $usersWithoutExpiry = $stmt->fetchAll();
+            foreach ($usersWithoutExpiry as $u) {
+                $stmtPlan = $this->pdo->prepare("SELECT duration FROM plans WHERE id = ?");
+                $stmtPlan->execute([$u['plan_id']]);
+                $dur = $stmtPlan->fetchColumn() ?: '1 Month';
+                $dur = trim($dur);
+                $ts = (stripos($dur, '+') !== 0 && stripos($dur, '-') !== 0) ? strtotime('+' . $dur) : strtotime($dur);
+                $planExpiresAt = ($ts !== false) ? date('Y-m-d H:i:s', $ts) : date('Y-m-d H:i:s', strtotime('+1 Month'));
+
+                $stmtUpdate = $this->pdo->prepare("UPDATE users SET plan_expires_at = ? WHERE id = ?");
+                $stmtUpdate->execute([$planExpiresAt, $u['id']]);
+            }
+        } catch (\Exception $e) {
+            // Safe fallback if query fails
+        }
     }
 }
