@@ -4512,6 +4512,17 @@ document.addEventListener('DOMContentLoaded', () => {
     state.activeOutreachLead = null;
     state.activeOutreachChannel = 'email'; // 'email', 'whatsapp', 'sms'
 
+    // Parse URL parameters to set initial outreach selection
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramCampaignId = urlParams.get('campaign_id');
+    const paramLeadId = urlParams.get('lead_id');
+    if (paramCampaignId) {
+        state.activeCampaignId = parseInt(paramCampaignId);
+    }
+    if (paramLeadId) {
+        state.activeOutreachLead = { id: parseInt(paramLeadId) };
+    }
+
     const outreachCampaignSelect = document.getElementById('outreach-campaign-select');
     const outreachLlmSelect = document.getElementById('outreach-llm-select');
     const outreachContactsList = document.getElementById('outreach-contacts-list');
@@ -4923,7 +4934,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentLead = leads.find(l => l.id == state.activeOutreachLead.id);
                 selectOutreachLead(currentLead);
                 const activeCard = outreachContactsList.querySelector(`.outreach-lead-card[data-id="${currentLead.id}"]`);
-                if (activeCard) activeCard.style.background = 'rgba(99, 102, 241, 0.15)';
+                if (activeCard) {
+                    activeCard.style.background = 'rgba(99, 102, 241, 0.15)';
+                    activeCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                }
             } else {
                 selectOutreachLead(leads[0]);
                 const firstCard = outreachContactsList.querySelector('.outreach-lead-card');
@@ -5449,14 +5463,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             openWorkstationBtn.addEventListener('click', (e) => {
                                 e.stopPropagation();
                                 
-                                const outreachCampSelect = document.getElementById('outreach-campaign-select');
-                                if (outreachCampSelect) {
-                                    outreachCampSelect.value = campaignId;
+                                if (window.currentPageTab === 'outreach') {
+                                    const outreachCampSelect = document.getElementById('outreach-campaign-select');
+                                    if (outreachCampSelect) {
+                                        outreachCampSelect.value = campaignId;
+                                    }
+                                    state.activeCampaignId = parseInt(campaignId);
+                                    state.activeOutreachLead = lead;
+                                    switchTab('outreach');
+                                } else {
+                                    window.location.href = `/outreach?campaign_id=${campaignId}&lead_id=${lead.id}`;
                                 }
-                                state.activeCampaignId = parseInt(campaignId);
-                                state.activeOutreachLead = lead;
-                                
-                                switchTab('outreach');
                             });
                         }
 

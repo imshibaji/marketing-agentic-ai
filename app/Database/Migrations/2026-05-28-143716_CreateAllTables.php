@@ -51,6 +51,12 @@ class CreateAllTables extends Migration
                 'constraint' => 11,
                 'default'    => 100,
             ],
+            'duration' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 255,
+                'default'    => '1 Month',
+                'null'       => true,
+            ],
             'created_at' => [
                 'type' => 'DATETIME',
                 'null' => true,
@@ -134,6 +140,10 @@ class CreateAllTables extends Migration
                 'type'       => 'INT',
                 'constraint' => 11,
                 'default'    => 0,
+            ],
+            'plan_expires_at' => [
+                'type' => 'DATETIME',
+                'null' => true,
             ],
             'created_at' => [
                 'type' => 'DATETIME',
@@ -316,6 +326,10 @@ class CreateAllTables extends Migration
                 'null'       => true,
             ],
             'postal_address' => [
+                'type' => 'TEXT',
+                'null' => true,
+            ],
+            'calls_draft' => [
                 'type' => 'TEXT',
                 'null' => true,
             ],

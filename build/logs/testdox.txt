@@ -1,0 +1,20 @@
+Database Service (Tests\Database\DatabaseService)
+ [x] Database service initialization
+ [x] Settings
+ [x] Plans
+ [x] Users
+ [x] Campaigns and leads
+ [x] User activity logs
+ [x] Email otps
+
+Example Database
+ [x] Model find all
+ [x] Soft delete leaves row
+
+Example Session
+ [x] Session simple
+
+Health
+ [x] Is defined app path
+ [x] Base url has been set
+

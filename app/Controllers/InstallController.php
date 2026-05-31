@@ -236,8 +236,7 @@ class InstallController extends BaseController
 
         // Insert Admin user
         $passHash = password_hash($adminPassword, PASSWORD_BCRYPT);
-        $userModel = new \MarketingAgent\Model\User($pdo);
-        $userModel->createUser($adminUsername, $passHash, 'admin', $adminName, $adminEmail, null, null, $planId);
+        $dbService->createUser($adminUsername, $passHash, 'admin', $adminName, $adminEmail, null, null, $planId);
 
         // Save default settings
         $settings = [
