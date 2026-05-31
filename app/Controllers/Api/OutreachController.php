@@ -50,20 +50,20 @@ class OutreachController extends BaseApiController
             // Check and Enforce Quotas
             $userDetails = $this->db->getUserById((int)$user['id']);
             if ($this->isPlanExpired($userDetails)) {
-                return $this->respondError("Plan expired. Your plan expired on {$userDetails['plan_expires_at']}. Please contact an administrator to renew.", 403);
+                return $this->respondError("Your limits are over. Please contact your service provider.", 403);
             }
-            if ($userDetails && $userDetails['role'] !== 'admin') {
+            if ($userDetails) {
                 if ($type === 'email') {
                     if ($userDetails['plan_email'] !== -1 && $userDetails['email_usage'] >= $userDetails['plan_email']) {
-                        return $this->respondError("Email outreach quota exceeded. You have used {$userDetails['email_usage']} of {$userDetails['plan_email']} allowed emails. Please contact an administrator.");
+                        return $this->respondError("Your limits are over. Please contact your service provider.", 403);
                     }
                 } else if ($type === 'whatsapp') {
                     if ($userDetails['plan_whatsapp'] !== -1 && $userDetails['whatsapp_usage'] >= $userDetails['plan_whatsapp']) {
-                        return $this->respondError("WhatsApp outreach quota exceeded. You have used {$userDetails['whatsapp_usage']} of {$userDetails['plan_whatsapp']} allowed messages. Please contact an administrator.");
+                        return $this->respondError("Your limits are over. Please contact your service provider.", 403);
                     }
                 } else if ($type === 'sms') {
                     if ($userDetails['plan_sms'] !== -1 && $userDetails['sms_usage'] >= $userDetails['plan_sms']) {
-                        return $this->respondError("SMS outreach quota exceeded. You have used {$userDetails['sms_usage']} of {$userDetails['plan_sms']} allowed SMS. Please contact an administrator.");
+                        return $this->respondError("Your limits are over. Please contact your service provider.", 403);
                     }
                 }
             }
@@ -217,7 +217,10 @@ class OutreachController extends BaseApiController
 
             $userDetails = $this->db->getUserById((int)$user['id']);
             if ($this->isPlanExpired($userDetails)) {
-                return $this->respondError("Plan expired. Your plan expired on {$userDetails['plan_expires_at']}. Please contact an administrator to renew.", 403);
+                return $this->respondError("Your limits are over. Please contact your service provider.", 403);
+            }
+            if ($userDetails && $userDetails['plan_llm'] !== -1 && $userDetails['llm_usage'] >= $userDetails['plan_llm']) {
+                return $this->respondError("Your limits are over. Please contact your service provider.", 403);
             }
 
             // Create LLM instance

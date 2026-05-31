@@ -572,7 +572,11 @@ class DatabaseService {
     // ─── Plans Delegation ──────────────────────────────────────────
 
     public function getPlans(): array {
-        return $this->planModel->orderBy('id', 'ASC')->findAll();
+        $plans = $this->planModel->orderBy('id', 'ASC')->findAll();
+        foreach ($plans as &$plan) {
+            $plan['user_count'] = $this->userModel->where('plan_id', $plan['id'])->countAllResults();
+        }
+        return $plans;
     }
 
     public function getPlan(int $id): ?array {

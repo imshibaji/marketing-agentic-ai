@@ -1,6 +1,6 @@
 {
   "name": "Notification Widget",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Adds a premium dashboard widget for monitoring system alerts, user mentions, and quick notification handling (marking as read/dismissing).",
   "author": "Mark Dev",
   "entry_php": "app.php",

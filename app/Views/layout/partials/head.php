@@ -30,7 +30,7 @@
     $plugins = \MarketingAgent\Plugin\PluginManager::getInstalledPlugins();
     foreach ($plugins as $plugin) {
         if ($plugin['active'] && $plugin['has_css']) {
-            echo '    <link rel="stylesheet" href="/plugin-asset.php?plugin=' . htmlspecialchars($plugin['id']) . '&type=css">' . "\n";
+            echo '    <link rel="stylesheet" href="/plugin-asset.php?plugin=' . htmlspecialchars($plugin['id']) . '&type=css&v=' . htmlspecialchars($plugin['version']) . '">' . "\n";
         }
     }
     ?>

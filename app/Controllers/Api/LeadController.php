@@ -59,10 +59,10 @@ class LeadController extends BaseApiController
             }
 
             $userDetails = $this->db->getUserById((int)$user['id']);
-            if ($user['role'] !== 'admin' && $userDetails['plan_leads'] !== -1) {
+            if ($userDetails && $userDetails['plan_leads'] !== -1) {
                 $leadCount = $this->db->getUserLeadCount((int)$user['id']);
                 if ($leadCount >= $userDetails['plan_leads']) {
-                    return $this->respondError("Plan limit reached. You can store at most {$userDetails['plan_leads']} leads in your CRM. Please contact an administrator.", 403);
+                    return $this->respondError("Your limits are over. Please contact your service provider.", 403);
                 }
             }
 
@@ -293,13 +293,17 @@ class LeadController extends BaseApiController
 
         $userDetails = $this->db->getUserById((int)$user['id']);
         if ($this->isPlanExpired($userDetails)) {
-            $sendSseEvent('error', ['message' => "Plan expired. Your plan expired on {$userDetails['plan_expires_at']}. Please contact an administrator to renew."]);
+            $sendSseEvent('error', ['message' => "Your limits are over. Please contact your service provider."]);
             exit;
         }
-        if ($user['role'] !== 'admin' && $userDetails['plan_leads'] !== -1) {
+        if ($userDetails && $userDetails['plan_llm'] !== -1 && $userDetails['llm_usage'] >= $userDetails['plan_llm']) {
+            $sendSseEvent('error', ['message' => "Your limits are over. Please contact your service provider."]);
+            exit;
+        }
+        if ($userDetails && $userDetails['plan_leads'] !== -1) {
             $leadCount = $this->db->getUserLeadCount((int)$user['id']);
             if ($leadCount >= $userDetails['plan_leads']) {
-                $sendSseEvent('error', ['message' => "Plan limit reached. You can store at most {$userDetails['plan_leads']} leads in your CRM. Please contact an administrator."]);
+                $sendSseEvent('error', ['message' => "Your limits are over. Please contact your service provider."]);
                 exit;
             }
         }
@@ -378,8 +382,19 @@ class LeadController extends BaseApiController
 
         $userDetails = $this->db->getUserById((int)$user['id']);
         if ($this->isPlanExpired($userDetails)) {
-            $sendSseEvent('error', ['message' => "Plan expired. Your plan expired on {$userDetails['plan_expires_at']}. Please contact an administrator to renew."]);
+            $sendSseEvent('error', ['message' => "Your limits are over. Please contact your service provider."]);
             exit;
+        }
+        if ($userDetails && $userDetails['plan_llm'] !== -1 && $userDetails['llm_usage'] >= $userDetails['plan_llm']) {
+            $sendSseEvent('error', ['message' => "Your limits are over. Please contact your service provider."]);
+            exit;
+        }
+        if ($userDetails && $userDetails['plan_leads'] !== -1) {
+            $leadCount = $this->db->getUserLeadCount((int)$user['id']);
+            if ($leadCount >= $userDetails['plan_leads']) {
+                $sendSseEvent('error', ['message' => "Your limits are over. Please contact your service provider."]);
+                exit;
+            }
         }
 
         $sourceType = $this->request->getGet('source_type') ?? 'default';

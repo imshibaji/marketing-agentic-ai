@@ -49,7 +49,7 @@ window.AppHooks = {
 $plugins = \MarketingAgent\Plugin\PluginManager::getInstalledPlugins();
 foreach ($plugins as $plugin) {
     if ($plugin['active'] && $plugin['has_js']) {
-        echo '    <script src="/plugin-asset.php?plugin=' . htmlspecialchars($plugin['id']) . '&type=js"></script>' . "\n";
+        echo '    <script src="/plugin-asset.php?plugin=' . htmlspecialchars($plugin['id']) . '&type=js&v=' . htmlspecialchars($plugin['version']) . '"></script>' . "\n";
     }
 }
 ?>

@@ -2,6 +2,11 @@
  * Notification Center Widget Plugin - Client script
  */
 (function() {
+    function getRealElement(id) {
+        const el = Document.prototype.getElementById.call(document, id);
+        return (el && el instanceof HTMLElement) ? el : null;
+    }
+
     let currentUser = null;
     let settings = {
         maxDisplay: 5,
@@ -94,7 +99,7 @@
     // Ensure container and styles exist
     function ensureToastContainer() {
         injectStyles();
-        let toastContainer = document.getElementById('notif-toast-container');
+        let toastContainer = getRealElement('notif-toast-container');
         if (!toastContainer) {
             toastContainer = document.createElement('div');
             toastContainer.id = 'notif-toast-container';
@@ -238,9 +243,9 @@
             mentionCount = allNotifications.filter(n => n.message.includes(`@${currentUser.username}`)).length;
         }
 
-        const totalBadge = document.getElementById('widget-stat-total');
-        const unreadBadge = document.getElementById('widget-stat-unread');
-        const mentionBadge = document.getElementById('widget-stat-mentions');
+        const totalBadge = getRealElement('widget-stat-total');
+        const unreadBadge = getRealElement('widget-stat-unread');
+        const mentionBadge = getRealElement('widget-stat-mentions');
 
         if (totalBadge) totalBadge.textContent = totalCount;
         if (unreadBadge) {
@@ -269,11 +274,11 @@
 
     // Render the notifications list inside the widget
     function renderNotificationsList() {
-        const listContainer = document.getElementById('notif-widget-list');
+        const listContainer = getRealElement('notif-widget-list');
         if (!listContainer) return;
 
-        const filterValue = document.getElementById('notif-filter')?.value || 'all';
-        const searchValue = (document.getElementById('notif-search')?.value || '').toLowerCase().trim();
+        const filterValue = getRealElement('notif-filter')?.value || 'all';
+        const searchValue = (getRealElement('notif-search')?.value || '').toLowerCase().trim();
 
         // 1. Apply filtering
         let filtered = allNotifications;
@@ -470,11 +475,11 @@
 
     // Inject App Settings fields
     function injectSettingsFields() {
-        const appPanel = document.getElementById('app-panel');
+        const appPanel = getRealElement('app-panel');
         if (!appPanel) return;
 
         // Check if already injected
-        if (document.getElementById('notification_widget_max_display')) return;
+        if (getRealElement('notification_widget_max_display')) return;
 
         const container = document.createElement('div');
         container.style.cssText = `
@@ -510,7 +515,7 @@
 
     // Injects HTML/CSS styles to head
     function injectStyles() {
-        if (document.getElementById('notif-widget-styles')) return;
+        if (getRealElement('notif-widget-styles')) return;
 
         const style = document.createElement('style');
         style.id = 'notif-widget-styles';
@@ -562,11 +567,11 @@
 
     // Build and inject the dashboard widget
     async function injectDashboardWidget() {
-        const dashboardTab = document.getElementById('tab-admin-dashboard');
+        const dashboardTab = getRealElement('tab-admin-dashboard');
         if (!dashboardTab) return;
 
         // Check if already injected
-        if (document.getElementById('notification-center-widget')) return;
+        if (getRealElement('notification-center-widget')) return;
 
         // Setup local read states if not already done
         if (!currentUser) {
@@ -644,8 +649,8 @@
         `;
 
         // Position it: below stats grid
-        const adminStats = document.getElementById('admin-only-stats');
-        const userStats = document.getElementById('user-only-stats');
+        const adminStats = getRealElement('admin-only-stats');
+        const userStats = getRealElement('user-only-stats');
         const insertionTarget = userStats || adminStats;
 
         if (insertionTarget) {
@@ -655,11 +660,11 @@
         }
 
         // Add event listeners for widget controls
-        document.getElementById('notif-search').addEventListener('input', renderNotificationsList);
-        document.getElementById('notif-filter').addEventListener('change', renderNotificationsList);
+        getRealElement('notif-search').addEventListener('input', renderNotificationsList);
+        getRealElement('notif-filter').addEventListener('change', renderNotificationsList);
         
         // Mark all read button
-        document.getElementById('notif-mark-all-read').addEventListener('click', () => {
+        getRealElement('notif-mark-all-read').addEventListener('click', () => {
             const visibleItems = allNotifications;
             if (visibleItems.length === 0) return;
             visibleItems.forEach(n => readNotificationIds.add(n.id));
@@ -670,8 +675,8 @@
         });
 
         // Simulate Alert Button
-        document.getElementById('notif-simulate-btn').addEventListener('click', async () => {
-            const btn = document.getElementById('notif-simulate-btn');
+        getRealElement('notif-simulate-btn').addEventListener('click', async () => {
+            const btn = getRealElement('notif-simulate-btn');
             btn.disabled = true;
             try {
                 const response = await fetch('api/plugin-route.php?plugin=notification-widget&action=simulate', {
@@ -696,8 +701,8 @@
         });
 
         // Simulate @Mention Button
-        document.getElementById('notif-simulate-mention-btn').addEventListener('click', async () => {
-            const btn = document.getElementById('notif-simulate-mention-btn');
+        getRealElement('notif-simulate-mention-btn').addEventListener('click', async () => {
+            const btn = getRealElement('notif-simulate-mention-btn');
             btn.disabled = true;
             try {
                 const response = await fetch('api/plugin-route.php?plugin=notification-widget&action=simulate&type=mention', {

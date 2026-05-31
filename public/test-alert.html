@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Alert</title>
+    <link rel="stylesheet" href="/plugin-asset.php?plugin=alert-box&type=css">
+</head>
+<body>
+    <h1 style="color: white; font-family: sans-serif;">Test Alert Box Plugin</h1>
+    <button id="btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Click me to alert</button>
+    <script src="/plugin-asset.php?plugin=alert-box&type=js"></script>
+    <script>
+        document.getElementById('btn').addEventListener('click', () => {
+            alert("Error sending outreach: Your limits are over. Please contact your service provider.");
+        });
+    </script>
+</body>
+</html>
