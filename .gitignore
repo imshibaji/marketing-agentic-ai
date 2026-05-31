@@ -13,6 +13,8 @@
 
 # Codeigniter 4 specific
 writable/
+build/
+tests/_support/_generated/
 
 # Logs and cache
 /logs/

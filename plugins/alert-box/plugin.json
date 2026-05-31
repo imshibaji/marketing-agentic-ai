@@ -1,0 +1,9 @@
+{
+  "name": "Alert Box",
+  "version": "1.0.0",
+  "description": "Intercepts standard browser alerts and displays them as beautiful, non-blocking toast notifications.",
+  "author": "Antigravity",
+  "entry_php": "app.php",
+  "entry_js": "app.js",
+  "entry_css": ""
+}

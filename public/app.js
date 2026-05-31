@@ -635,6 +635,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 2500);
     }
 
+    // Expose showToast globally
+    window.showToast = showToast;
+
     // ----------------------------------------------------
     // CAMPAIGNS CORE & WORKFLOW
     // ----------------------------------------------------
