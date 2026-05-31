@@ -11,6 +11,9 @@
 /database/*.sqlite
 /database/*.db
 
+# Codeigniter 4 specific
+writable/
+
 # Logs and cache
 /logs/
 *.log

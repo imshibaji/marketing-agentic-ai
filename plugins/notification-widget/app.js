@@ -12,6 +12,7 @@
     let knownNotificationIds = new Set();
     let readNotificationIds = new Set();
     let pollIntervalId = null;
+    let recentMessages = new Set();
 
     // Load active settings from server
     async function loadPluginSettings() {
@@ -90,10 +91,58 @@
         }
     }
 
+    // Ensure container and styles exist
+    function ensureToastContainer() {
+        injectStyles();
+        let toastContainer = document.getElementById('notif-toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'notif-toast-container';
+            toastContainer.style.cssText = `
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                z-index: 10110;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                pointer-events: none;
+            `;
+            document.body.appendChild(toastContainer);
+        }
+        return toastContainer;
+    }
+
+    // Global Hub initialization
+    async function initNotificationHub() {
+        injectStyles();
+        ensureToastContainer();
+        
+        // Fetch current user
+        try {
+            const authRes = await fetch('api/auth-status.php');
+            const authData = await authRes.json();
+            if (authData.success) {
+                currentUser = authData.user;
+                loadReadState();
+            }
+        } catch (e) {
+            console.error('[Notification Widget] Auth check failed:', e);
+        }
+    }
+
     // Show sliding toast alert for new notifications
     function showToastAlert(notification) {
-        const toastContainer = document.getElementById('notif-toast-container');
+        const toastContainer = ensureToastContainer();
         if (!toastContainer) return;
+
+        if (notification.message) {
+            const msgKey = notification.message.trim().toLowerCase();
+            recentMessages.add(msgKey);
+            setTimeout(() => {
+                recentMessages.delete(msgKey);
+            }, 30000);
+        }
 
         const toast = document.createElement('div');
         toast.className = 'notif-toast-item';
@@ -396,8 +445,11 @@
                     if (!knownNotificationIds.has(notif.id)) {
                         knownNotificationIds.add(notif.id);
                         if (!silent) {
-                            hasNew = true;
-                            lastNewNotif = notif;
+                            const msgKey = (notif.message || '').trim().toLowerCase();
+                            if (!recentMessages.has(msgKey)) {
+                                hasNew = true;
+                                lastNewNotif = notif;
+                            }
                         }
                     }
                 });
@@ -516,36 +568,11 @@
         // Check if already injected
         if (document.getElementById('notification-center-widget')) return;
 
-        // Fetch current user and setup localStorage
-        try {
-            const authRes = await fetch('api/auth-status.php');
-            const authData = await authRes.json();
-            if (authData.success) {
-                currentUser = authData.user;
-            }
-        } catch (e) {
-            console.error('[Notification Widget] Auth check failed:', e);
-        }
-
-        loadReadState();
-        injectStyles();
-
-        // Toast container for floating notification alerts
-        let toastContainer = document.getElementById('notif-toast-container');
-        if (!toastContainer) {
-            toastContainer = document.createElement('div');
-            toastContainer.id = 'notif-toast-container';
-            toastContainer.style.cssText = `
-                position: fixed;
-                bottom: 24px;
-                right: 24px;
-                z-index: 10110;
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                pointer-events: none;
-            `;
-            document.body.appendChild(toastContainer);
+        // Setup local read states if not already done
+        if (!currentUser) {
+            await initNotificationHub();
+        } else {
+            loadReadState();
         }
 
         const widgetCard = document.createElement('div');
@@ -705,7 +732,41 @@
 
     // Bootstrap hook execution
     if (window.AppHooks) {
+        window.AppHooks.addFilter('show_toast', function(handled, message, type) {
+            let title = '⚡ Performance Event';
+            const lowerMessage = message.toLowerCase();
+            const lowerType = (type || '').toLowerCase();
+            
+            if (lowerType === 'error' || lowerMessage.includes('fail') || lowerMessage.includes('error') || lowerMessage.includes('forbidden')) {
+                title = '⚠️ Alert / Warning';
+            } else if (lowerMessage.includes('lead') || lowerMessage.includes('prospect')) {
+                title = '🔥 Lead Action';
+            } else if (lowerMessage.includes('campaign')) {
+                title = '🤖 Campaign Operation';
+            } else if (lowerMessage.includes('outreach') || lowerMessage.includes('sent')) {
+                title = '📧 Outreach Dispatched';
+            } else if (lowerMessage.includes('plan') || lowerMessage.includes('usage') || lowerMessage.includes('reset') || lowerMessage.includes('renew')) {
+                title = '⚙️ Limit / Usage Reset';
+            } else if (lowerMessage.includes('database') || lowerMessage.includes('backup') || lowerMessage.includes('restore') || lowerMessage.includes('demo')) {
+                title = '📦 System Maintenance';
+            } else if (lowerMessage.includes('saved') || lowerMessage.includes('created') || lowerMessage.includes('updated')) {
+                title = '💾 Save Performance';
+            }
+
+            showToastAlert({
+                id: Date.now() + Math.random(),
+                title: title,
+                message: message,
+                created_at: new Date().toISOString(),
+                sender_username: currentUser ? currentUser.username : 'System'
+            });
+            return true;
+        });
+
         window.AppHooks.addAction('dom_ready', async function() {
+            // Initialize global elements (styles, container, user status)
+            await initNotificationHub();
+
             // Load configuration
             await loadPluginSettings();
 

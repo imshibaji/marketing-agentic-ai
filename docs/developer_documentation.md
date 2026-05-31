@@ -1,179 +1,158 @@
 # Marketing AI Agent - Developer Documentation
 
-This developer guide describes the codebase architecture, directory structures, extension patterns, and schema migration strategies of the **Marketing AI Agent Suite**. Use this reference when making modifications, adding new features, or updating database models.
+This developer guide describes the codebase architecture, directory structures, extension patterns, and schema migration strategies of the **Marketing AI Agent Suite** since its modernization to the CodeIgniter 4 framework.
 
 ---
 
 ## 1. Codebase Architecture
 
-The application is built as a lightweight, single-page application (SPA) with a PHP REST API backend and a vanilla HTML/CSS/JS frontend.
+The application uses the MVC architectural pattern powered by CodeIgniter 4 for clean routing, controller dispatching, and layout templating, connected to a premium single-page application (SPA) client interface.
 
 ```mermaid
 graph TD
-    Client(Browser UI: index.php / app.js / style.css)
-    API(REST API Endpoints: public/api/*)
+    Client(Browser SPA: HTML Views / app.js / style.css)
+    Router(CodeIgniter Router: app/Config/Routes.php)
+    Filters(CI4 Route Filters: auth / guest / webauth)
+    Controllers(API Controllers: app/Controllers/Api/*)
     Services(Core Services: DatabaseService / AuthService / LlmFactory)
     Plugins(Plugin Engine: HookManager / PluginManager / plugins/*)
-    Models(Database Models: src/Model/*)
-    Agents(AI Agents: src/Agent/*)
-    SQLite[(SQLite Database: database.sqlite)]
+    Models(Active Record Models: app/Libraries/MarketingAgent/Model/*)
+    Database[(SQL Database: SQLite / MySQL / PostgreSQL)]
 
-    Client -->|JSON / Fetch| API
-    API --> Services
+    Client -->|JSON / Fetch| Router
+    Router --> Filters
+    Filters --> Controllers
+    Controllers --> Services
     Client -.->|Inject Assets| Plugins
     Services --> Plugins
     Services --> Models
-    Services --> Agents
-    Models --> SQLite
+    Models --> Database
 ```
 
 ### Core Technologies
-- **Backend Language**: PHP 8.x (vanilla, object-oriented).
-- **Frontend Language**: HTML5, Vanilla CSS3 (custom variables, dark mode/glassmorphism theme), Vanilla ES6 JavaScript.
-- **Database**: SQLite 3 (via PDO).
+- **Backend Framework**: CodeIgniter 4.x (PHP 8.x).
+- **Frontend Core**: Vanilla HTML5, CSS3 Variables (supporting dark mode/glassmorphism themes), and ES6 JavaScript.
+- **Database Engine**: Driver-agnostic PDO SQL (supporting SQLite, MySQL, and PostgreSQL out-of-the-box).
 
 ---
 
 ## 2. Directory Structure
 
 ```
-├── autoload.php                   # PSR-4 Autoloader
-├── src/
-│   ├── Plugin/                    # Plugin Hook Registry & Engine
-│   │   ├── HookManager.php        # Action and Filter Hook dispatcher
-│   │   └── PluginManager.php      # Directory scanner, loader, and manager
-│   ├── Model/                     # Database Model Classes
-│   │   ├── BaseModel.php          # Shared connection constructor
-│   │   ├── User.php               # Users CRM table and logins
-│   │   ├── Lead.php               # Prospects CRM table and qualification data
-│   │   ├── Setting.php            # Global Key-Value system settings
-│   │   └── ...                    # Plan, Campaign, Chat, Notification models
-│   ├── Service/                   # Core business logic services
-│   │   ├── DatabaseService.php    # Main database helper & model delegations
-│   │   ├── AuthService.php        # Session and password authentication
-│   │   └── Llm/                   # LLM factory and provider adapters
-│   │       ├── LlmProviderInterface.php # Contract interface
-│   │       ├── QuotaLlmProvider.php     # Limit enforcement wrapper
-│   │       └── ...                      # Gemini, LM Studio, Ollama adapters
-│   └── Agent/                     # AI agents orchestration
-│       ├── LeadAgent.php          # Scraper & Prospect qualification pipeline
-│       └── ...                    
-├── plugins/                       # Directory containing all plugins
-│   └── slack-notifier/            # Slack Notifier Demo Plugin
-├── public/                        # Public Web Root
-│   ├── index.php                  # Main HTML UI Layout & Skeletons
-│   ├── app.js                     # Frontend State, Form Handlers & AJAX Toggles
-│   ├── style.css                  # CSS Styling tokens and themes
-│   └── api/                       # JSON REST Endpoints
-│       ├── login.php              # Auth Login endpoint
-│       ├── settings.php           # Admin and Public Settings loader/saver
-│       ├── backup.php             # Database Backup download
-│       ├── restore.php            # Safe Database Restore upload
-│       ├── plugins.php            # Plugin activation/deactivation REST endpoint
-│       ├── plugin-route.php       # Dynamic plugins route dispatcher
-│       └── ...                    
+├── app/                           # CodeIgniter 4 Application Code
+│   ├── Config/                    # Framework configuration (Routes.php, Filters.php)
+│   ├── Controllers/               # MVC Controllers
+│   │   ├── AuthController.php     # Session page controller
+│   │   ├── DashboardController.php# Main landing view controller
+│   │   ├── Api/                   # JSON REST API Endpoints
+│   │   │   ├── BaseApiController.php # Shared helper utilities
+│   │   │   ├── AuthController.php    # Auth operations
+│   │   │   ├── CampaignController.php# Campaigns operations
+│   │   │   ├── LeadController.php    # Lead lists and standalone scraper
+│   │   │   ├── PlanController.php    # Billing plans management
+│   │   │   └── UserController.php    # CRM user records and quotas reset
+│   ├── Database/                  # Migrations and Seeds
+│   ├── Libraries/MarketingAgent/  # Core Domain Business Logic
+│   │   ├── Model/                 # Database Active Record Models
+│   │   │   ├── BaseModel.php      # Base Model bridging PDO and OrmModel
+│   │   │   ├── User.php           # User records, auth logs, usage reset
+│   │   │   └── Plan.php           # Duration plans, limits, seeding
+│   │   ├── Service/               # Service Layer Orchestrators
+│   │   │   └── DatabaseService.php# DB model facade delegations
+│   │   ├── Tool/                  # Scrapers and SEO search utility tools
+│   │   └── Plugin/                # Plugin Managers and Hook dispatcher
+│   ├── Views/                     # HTML View Templates
+│   │   ├── layout/                # Master view structures
+│   │   │   ├── main.php           # Master frame template
+│   │   │   └── partials/          # Header, head tags, script, settings, and modal components
+│   │   └── ...                    # Page-specific content views (dashboard, campaigns, plans, users)
+├── public/                        # Web Server Document Root
+│   ├── app.js                     # Core Frontend State and Fetch Handler
+│   ├── style.css                  # UI Design System Tokens and Variables
+│   └── index.php                  # Framework front controller entry point
 └── database/
-    └── database.sqlite            # SQLite Database File (gitignored)
+    └── database.sqlite            # Local SQLite database (Git ignored)
 ```
 
 ---
 
 ## 3. Database Schema & Migration Strategy
 
-Database tables are initialized automatically on application startup. Each model file inside `src/Model/` extends `BaseModel` and implements an `initializeSchema()` method.
+Database schemas are initialized automatically. Core model schema structures inherit from [BaseModel](file:///Users/shibaji/.gemini/antigravity/scratch/marketing-ai-agent/app/Libraries/MarketingAgent/Model/BaseModel.php) which wraps a driver-agnostic [Schema](file:///Users/shibaji/.gemini/antigravity/scratch/marketing-ai-agent/app/Libraries/MarketingAgent/Database/Schema.php) helper.
 
-### How to Add a Column or Table
-To update database schemas safely without breaking existing setups:
+### How to Modify Schemas / Add Columns
 
-1. **Create the Schema**: Write the `CREATE TABLE IF NOT EXISTS` statement in the model's `initializeSchema()` method:
+To update database schemas safely without breaking existing installs or overwriting production rows:
+
+1. **Write Column Inits**: Write your `createTableIfNotExists()` or `addColumnIfNotExists()` call inside the model's `initializeSchema()` method. Use driver-agnostic types:
    ```php
    public function initializeSchema(): void {
-       $this->pdo->exec("CREATE TABLE IF NOT EXISTS my_new_table (
-           id INTEGER PRIMARY KEY AUTOINCREMENT,
-           name TEXT NOT NULL
-       )");
+       $pk = $this->schema->primaryKeyDdl();
+       $vc = $this->schema->varcharDdl(255);
+
+       $this->schema->createTableIfNotExists('my_custom_table', "
+           id {$pk},
+           name {$vc} NOT NULL
+       ");
+
+       // Add columns dynamically
+       $this->schema->addColumnIfNotExists('my_custom_table', 'new_flag', 'INTEGER DEFAULT 0');
    }
    ```
-2. **Handle Migrations**: For adding columns to existing tables, wrap the `ALTER TABLE` statement in a `try-catch` block. This ensures that the migration runs once, and subsequent application startups fail silently when the column already exists:
+2. **Trigger Auto-Migration**: Register the model's initialization call in `app/Libraries/MarketingAgent/Service/DatabaseService.php::initializeSchema()`:
    ```php
-   try {
-       $this->pdo->exec("ALTER TABLE my_existing_table ADD COLUMN postal_address TEXT");
-   } catch (\PDOException $e) {
-       // Column already exists, safe to ignore
-   }
+   // Auto-runs on every database connector initialization
+   $this->myCustomModel->initializeSchema();
    ```
-3. **Register the Schema**: Ensure your new model's `initializeSchema()` is called in `src/Service/DatabaseService.php::initializeSchema()`.
 
 ---
 
 ## 4. How to Add a New LLM Provider
 
-The application wraps LLM calls behind the `LlmProviderInterface`. To add a new provider (e.g. OpenAI or Anthropic):
+The application wraps LLM calls behind the `LlmProviderInterface`. To add a new provider:
 
-1. **Implement the Adapter**: Create a new class under `src/Service/Llm/` implementing the interface:
+1. **Implement the Adapter**: Create a new class under `app/Libraries/MarketingAgent/Service/Llm/` implementing the interface:
    ```php
    namespace MarketingAgent\Service\Llm;
 
-   class OpenAIProvider implements LlmProviderInterface {
-       private string $apiKey;
-       private string $model;
-
-       public function __construct(string $apiKey, string $model) {
-           $this->apiKey = $apiKey;
-           $this->model = $model;
-       }
-
+   class MyNewProvider implements LlmProviderInterface {
        public function generate(string $systemPrompt, string $userPrompt, float $temperature = 0.7): string {
-           // Implement cURL request to OpenAI API
-           return $generatedText;
+           // Implement API logic
+           return $text;
        }
    }
    ```
-2. **Register in Factory**: Modify `src/Service/Llm/LlmFactory.php` to include your new provider key:
+2. **Register in Factory**: Add the model check inside `LlmFactory::create()`:
    ```php
    switch ($provider) {
-       case 'openai':
-           return new OpenAIProvider($settings['openai_api_key'] ?? '', $settings['openai_model'] ?? 'gpt-4o');
-       // ...
+       case 'mynew':
+           return new MyNewProvider($apiToken);
    }
    ```
-3. **Update UI**: Add configuration input fields inside the settings modal in `public/index.php`, save handler logic in `public/app.js`, and whitelist the configuration keys in `public/api/settings.php`.
+3. **Update UI Panel**: Add fields inside the LLM Tab in [settings_modal.php](file:///Users/shibaji/.gemini/antigravity/scratch/marketing-ai-agent/app/Views/layout/partials/settings_modal.php), populate the selectors in [app.js](file:///Users/shibaji/.gemini/antigravity/scratch/marketing-ai-agent/public/app.js), and whitelist configuration keys in `SettingController.php`.
 
 ---
 
 ## 5. Coding & Style Guidelines
 
-Developers must adhere to the following principles during modifications:
-
 ### Backend API Design
-- **JSON Input/Output**: APIs must read request inputs via `php://input` and return consistent JSON structures:
-  ```php
-  $input = json_decode(file_get_contents('php://input'), true);
-  echo json_encode(['success' => true, 'data' => $result]);
-  ```
-- **Permission Checking**: Always authenticate routes by calling `AuthService::getCurrentUser()` and verify role levels before executing actions:
-  ```php
-  $user = AuthService::getCurrentUser();
-  if (!$user || $user['role'] !== 'admin') {
-      http_response_code(403);
-      echo json_encode(['success' => false, 'error' => 'Forbidden']);
-      exit;
-  }
-  ```
+- **BaseApiController Extension**: API Controllers must extend [BaseApiController](file:///Users/shibaji/.gemini/antigravity/scratch/marketing-ai-agent/app/Controllers/Api/BaseApiController.php) to inherit shared methods:
+  - `$this->getJsonInput()`: Decodes incoming raw JSON requests.
+  - `$this->respondSuccess($data, $message)`: Uniform success formatter.
+  - `$this->respondError($message, $code)`: Uniform error formatter.
+- **Route Filtering**: Protect endpoints by listing them under authenticated groups inside `Routes.php` (which enforces filters like `auth` or `webauth`).
 
 ### Frontend State & DOM Management
-- **Central State Tracking**: Track UI selections, current active campaign, and active lead states within the global `state` object inside `public/app.js`.
-- **Form Disabling**: Always disable action buttons and show loading feedback (spinners) during asynchronous requests. Re-enable them when responses return (success or error).
-- **Strict Styling Tokens**: Respect the glassmorphic dark theme variables defined in `public/style.css`. Avoid hardcoded colors like solid reds/blues; instead, use variables like `var(--accent-primary)`, `var(--border-color)`, and HSL tailored shadows.
+- **Strict CSS Theme Compliance**: Respect styling tokens and custom colors (`var(--accent-primary)`, `var(--border-color)`, `var(--bg-secondary)`) defined in `style.css`.
+- **Central State Management**: Always keep dropdown references, selected campaign, and active lead states within the global `state` object inside `app.js`.
+- **Loading Feedback**: Toggle button disabling and spinner icons (`fa-spinner fa-spin`) during async fetch operations to provide clear user feedback.
+- **Safe Date Norms**: Always use `safeParseDate()` helper in `app.js` when converting database datetime values to local display formats to prevent browser-specific parsing errors.
 
 ---
 
 ## 6. Pluggable Hook Architecture
 
 The application supports modular customization through backend and frontend hook registries:
-* **PHP Hook Registry**: Managed by [HookManager.php](file:///Users/shibaji/Sites/marketing-ai-agent/src/Plugin/HookManager.php). Supports registering event callbacks (`addAction`/`doAction`) and data transformations (`addFilter`/`applyFilters`).
-* **JS Hook Registry**: Managed on the client via the global `window.AppHooks` utility inside `public/index.php`. Allows injecting form inputs, styling panels, and listening to tab switches.
-* **Custom Routes**: Dynamic API calls can be routed to plugins via [plugin-route.php](file:///Users/shibaji/Sites/marketing-ai-agent/public/api/plugin-route.php).
-
-For complete information on creating plugins, hooks specs, and APIs, refer to the [Plugin Development Documentation](file:///Users/shibaji/Sites/marketing-ai-agent/docs/plugin_development_documentation.md).
-
+* **PHP Hook Registry**: Managed by [HookManager.php](file:///Users/shibaji/.gemini/antigravity/scratch/marketing-ai-agent/app/Libraries/MarketingAgent/Plugin/HookManager.php). Supports registering event callbacks (`addAction`/`doAction`) and data transformations (`addFilter`/`applyFilters`).
+* **JS Hook Registry**: Managed on the client via the global `window.AppHooks` utility inside `public/app.js`.
+* **Custom Routes**: Dynamic API calls can be routed to plugins via `Api\PluginRouteController`.

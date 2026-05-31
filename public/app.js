@@ -51,6 +51,8 @@ if (window.AppHooks) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+
+
     // Fire frontend hooks for dom_ready
     if (window.AppHooks) {
         window.AppHooks.doAction('dom_ready');
@@ -602,7 +604,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // ----------------------------------------------------
     // TOAST NOTIFICATIONS
     // ----------------------------------------------------
-    function showToast(message) {
+    function showToast(message, type = 'info') {
+        if (window.AppHooks) {
+            const handled = window.AppHooks.applyFilters('show_toast', false, message, type);
+            if (handled === true) {
+                return;
+            }
+        }
         const toast = document.createElement('div');
         toast.style.position = 'fixed';
         toast.style.bottom = '24px';
@@ -621,6 +629,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         document.body.appendChild(toast);
         setTimeout(() => {
+
             toast.style.opacity = '0';
             setTimeout(() => toast.remove(), 300);
         }, 2500);
@@ -1151,6 +1160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ----------------------------------------------------
+
     // CRM LEADS PIPELINE WORKFLOW & OUTREACH
     // ----------------------------------------------------
     // Unified lead generation execution logic
@@ -2071,6 +2081,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+
     // ----------------------------------------------------
     // AUTH OVERLAY — Login / Register / Logout
     // ----------------------------------------------------
@@ -2571,6 +2582,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ----------------------------------------------------
+
     // USER MANAGEMENT
     // ----------------------------------------------------
     // USER ADMINISTRATION & SYSTEM LOGS
@@ -3146,6 +3158,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+
     // ----------------------------------------------------
     // MANUAL LEAD ADDITION FLOW
     // ----------------------------------------------------
@@ -3663,6 +3676,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ----------------------------------------------------
+
     // CONTACTS DIRECTORY
     // ----------------------------------------------------
     let activeModalContact = null;
@@ -4037,6 +4051,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         manualLeadModal.style.display = 'flex';
     }
+
 
     // ----------------------------------------------------
     // LOAD USERS LIST FOR ADMIN (shared state cache)
@@ -4490,6 +4505,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ----------------------------------------------------
+
     // OUTREACH WORKSTATION LOGIC
     // ----------------------------------------------------
     state.outreachLeads = [];

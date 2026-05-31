@@ -321,6 +321,7 @@ class DatabaseService {
 
     public function logActivity(?int $userId, string $action, string $details): void {
         $this->userActivityLogModel->logActivity($userId, $action, $details);
+        \MarketingAgent\Plugin\HookManager::doAction('activity_logged', $userId, $action, $details);
     }
 
     public function getActivityLogs(?int $userId = null, string $role = 'user'): array {

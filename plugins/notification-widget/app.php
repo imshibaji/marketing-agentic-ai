@@ -102,3 +102,60 @@ HookManager::addAction('api_route_notification-widget_simulate', function(array 
         exit;
     }
 });
+
+// 4. Hook into backend activity logging to store notifications in db for key actions
+HookManager::addAction('activity_logged', function(?int $userId, string $action, string $details): void {
+    if (in_array($action, ['SIMULATED_NOTIFICATION', 'PUBLISHED_NOTIFICATION', 'DELETED_NOTIFICATION', 'LOGIN', 'LOGOUT', 'LOGIN_OTP'])) {
+        return;
+    }
+
+    $importantActions = [
+        'CREATE_CAMPAIGN',
+        'DELETE_CAMPAIGN',
+        'RUN_CAMPAIGN_GENERATOR',
+        'RUN_SDR_FINDER',
+        'RUN_STANDALONE_SCRAPER',
+        'SEND_OUTREACH',
+        'RESET_USAGE',
+        'RESET_PLAN_EXPIRY',
+        'CREATE_PLAN',
+        'UPDATE_PLAN',
+        'DELETE_PLAN',
+        'LOAD_DEMO'
+    ];
+
+    if (!in_array($action, $importantActions)) {
+        return;
+    }
+
+    $db = PluginManager::getDatabaseService();
+    if (!$db) {
+        return;
+    }
+    
+    $pdo = $db->getPdo();
+
+    $titles = [
+        'CREATE_CAMPAIGN' => '🤖 New Campaign Setup',
+        'DELETE_CAMPAIGN' => '⚠️ Campaign Removed',
+        'RUN_CAMPAIGN_GENERATOR' => '🤖 Campaign Copy Generated',
+        'RUN_SDR_FINDER' => '🔥 Prospects Qualified',
+        'RUN_STANDALONE_SCRAPER' => '⚡ Scraper Completed',
+        'SEND_OUTREACH' => '📧 Outreach Dispatched',
+        'RESET_USAGE' => '⚙️ Usage Restored',
+        'RESET_PLAN_EXPIRY' => '⚙️ Subscription Renewed',
+        'CREATE_PLAN' => '💼 New Plan Formed',
+        'UPDATE_PLAN' => '💼 Plan Settings Adjusted',
+        'DELETE_PLAN' => '⚠️ Plan Extinguished',
+        'LOAD_DEMO' => '📦 Demo Workspace Loaded'
+    ];
+
+    $title = $titles[$action] ?? '⚡ System Event';
+    
+    try {
+        $stmt = $pdo->prepare("INSERT INTO notifications (sender_id, title, message) VALUES (?, ?, ?)");
+        $stmt->execute([$userId, $title, $details]);
+    } catch (\Throwable $e) {
+        // Fail silently
+    }
+});
